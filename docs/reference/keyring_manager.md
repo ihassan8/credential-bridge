@@ -1,1 +1,3 @@
-::: credential_bridge.keyring_manager
+# KeyringBackend API (legacy)
+
+::: credential_bridge.backends.keyring.KeyringBackend

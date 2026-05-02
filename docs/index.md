@@ -4,48 +4,66 @@ hide:
   - toc
 ---
 
-<div class="pls-hero">
-
-<span class="pls-hero__badge">Python 3.8+ &nbsp;·&nbsp; MIT License &nbsp;·&nbsp; Minimal Dependencies</span>
-
-<img src="img/credential_bridge.png" alt="Credential Bridge" class="pls-hero__logo">
-
-<h1 class="pls-hero__title">
-  Secure. Vault.<br>
-  <span>Security-Ready</span> Storage.
-</h1>
-
-<p class="pls-hero__subtitle">
-   A Python package that allows user to interact with the HashiCorp Vault and Keyring. User can conveniently store and manage various systems and databases secrets in one place. This package supports both JWT token and AppRole to authenticate the Vault. Users can use CLI or user-friendly wizard for their convenient use. Perfect for any application needing safe secret storage.
-
-</p>
-
-<div class="pls-hero__actions">
-
-[Get Started](installation.md){ .md-button .md-button--primary }
-[View on GitHub](https://github.com/vertex-ai-automations/credential-bridge){ .md-button }
-
+<div class="cb-hero">
+  <h1>Credential Bridge</h1>
+  <p>Unified secrets management for Python — HashiCorp Vault, system keyring, and .env files through one clean API.</p>
+  <div class="cb-hero-buttons">
+    <a href="getting-started/installation/" class="cb-btn cb-btn-primary">Get Started</a>
+    <a href="backends/comparison/" class="cb-btn cb-btn-outline">Compare Backends</a>
+  </div>
 </div>
 
-## About The Project
-**Credential Bridge** is a Python package that allows user to interact with the HashiCorp Vault and Keyring. User can conveniently store and manage various systems and databases secrets in one place. This package supports both JWT token and AppRole to authenticate the Vault. Users can use CLI or user-friendly wizard for their convenient use. Perfect for any application needing safe secret storage.
+<div id="cb-terminal-demo" class="cb-terminal"></div>
 
-## 💡 Features
-* Support Hashicorp Vault and Keyring for all secrets management
-* Authenticate with HashiCorp Vault using AppRole or JWT Token
-* Manage secrets (add, get, update, delete)
-* Vault JWT Token refresh to avoid expiration
-* Interactive CLI wizard for convenient use
-* Encryption of sensitive data at rest
-* CLI for for managing Vault and keyring operations
+## Why Credential Bridge?
 
-📖 Get started with the links on the left, or jump straight to the [Quick Start](./installation.md).
+<div class="cb-cards">
+  <div class="cb-card">
+    <h3>🔌 Pluggable backends</h3>
+    <p>Swap between Vault, keyring, and .env with a single constructor argument. Add custom backends in minutes.</p>
+  </div>
+  <div class="cb-card">
+    <h3>🛡️ No silent failures</h3>
+    <p>Every error raises a typed exception — <code>VaultAuthError</code>, <code>EnvFileNotFoundError</code>. Catch exactly what you need.</p>
+  </div>
+  <div class="cb-card">
+    <h3>💻 Cross-platform</h3>
+    <p>Works identically on Windows and Linux. No OS-specific code paths or environment variables.</p>
+  </div>
+  <div class="cb-card">
+    <h3>🖥️ Modern CLI</h3>
+    <p>Rich output, interactive prompts, and tab-completion via the <code>cb</code> unified command.</p>
+  </div>
+</div>
 
----
+## Quick example
 
-## Contributing
+=== "SecretsManager"
 
-All contributions are welcome! If you have a suggestion that would make this better, please fork the repo and create a pull request.
+    ```python
+    from credential_bridge import SecretsManager
 
-[:fontawesome-brands-github: View on GitHub](https://github.com/vertex-ai-automations/pylogshield){ .md-button }
-[:fontawesome-solid-bug: Report an Issue](https://github.com/vertex-ai-automations/pylogshield/issues/new){ .md-button }
+    # Vault
+    sm = SecretsManager("vault", vault_token="s.xxx")
+    sm.add_secret("myapp/db", {"user": "admin", "pass": "s3cr3t"})
+
+    # .env file
+    sm = SecretsManager("env", path=".env")
+    sm.add_secret("database", {"DB_HOST": "localhost", "DB_PORT": "5432"})
+
+    # System keyring
+    sm = SecretsManager("keyring", service_name="myapp")
+    sm.get_secret("api_key")
+    ```
+
+=== "Direct backends"
+
+    ```python
+    from credential_bridge import VaultBackend, KeyringBackend, EnvFileBackend
+
+    vault = VaultBackend(vault_url="https://vault.example.com", vault_token="s.xxx")
+    vault.add_secret("myapp/db", {"user": "admin"})
+
+    env = EnvFileBackend(path=".env")
+    env.add_secret("API_KEY", {"API_KEY": "sk-abc123"})
+    ```

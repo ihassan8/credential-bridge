@@ -71,34 +71,43 @@ theme:
     - content.action.edit
     - content.action.view
 
-# Navigations 
+# Navigations
 nav:
-    - 📄Overview: 'index.md'
-    - 🚀Getting Started: 
-        - Installation: 'installation.md'
-    - 📕Basic Usage: 
-        - Vault: 'basic_usage/basic_vault.md'
-        - Keyring: 'basic_usage/basic_keyring.md'
-    - 💻CLI Usage: 
-        - Vault: 'cli usage/cli_vault.md'
-        - Keyring: 'cli usage/cli_keyring.md'
-        - Interactive Wizard: 'cli usage/interactive.md'
-    - 🔒Hashicorp Vault:
-        - Vault Login: 'vault/login_vault.md'
-        - Vault App Role: 'vault/vault_approle.md'
-        - Vault Token: 'vault/vault_token.md'
-    - ⚙️API Reference:
-        - Keyring Manager: 'reference/keyring_manager.md'
-        - Vault Manager: 'reference/vault_manager.md'
+  - Overview: 'index.md'
+  - Getting Started:
+      - Installation: 'getting-started/installation.md'
+      - Quick Start: 'getting-started/quickstart.md'
+  - Backends:
+      - Comparison: 'backends/comparison.md'
+      - HashiCorp Vault: 'backends/vault.md'
+      - System Keyring: 'backends/keyring.md'
+      - .env File: 'backends/env-file.md'
+  - CLI Reference:
+      - Unified CLI (cb): 'cli/cb.md'
+      - Vault CLI: 'cli/vault.md'
+      - Keyring CLI: 'cli/keyring.md'
+      - .env CLI: 'cli/env.md'
+  - Interactive Wizard: 'wizard.md'
+  - SecretsManager: 'secrets-manager.md'
+  - API Reference:
+      - SecretsManager: 'reference/secrets_manager.md'
+      - BaseSecretBackend: 'reference/base.md'
+      - VaultBackend: 'reference/vault_backend.md'
+      - KeyringBackend: 'reference/keyring_backend.md'
+      - EnvFileBackend: 'reference/env_file_backend.md'
+      - Exceptions: 'reference/exceptions.md'
 
 # Plugins
 plugins:
   - search:
       separator: '[\s\u200b\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
-  - git-authors
+  - git-authors:
+      enabled: !ENV [CI, false]
   - git-revision-date-localized:
+      enabled: !ENV [CI, false]
       enable_creation_date: true
       type: timeago
+      enable_git_follow: false
   - autorefs:
       resolve_closest: true
   - mkdocstrings:
@@ -219,6 +228,9 @@ copyright: >
 
 exclude_docs: |
   *.py
+  basic_usage/
+  cli usage/
+  vault/
 
 # Build options
 strict: false

@@ -1,1 +1,3 @@
-::: credential_bridge.vault_manager
+# VaultBackend API (legacy)
+
+::: credential_bridge.backends.vault.VaultBackend
