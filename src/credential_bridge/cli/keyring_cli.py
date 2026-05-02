@@ -1,62 +1,93 @@
-import argparse
+# src/credential_bridge/cli/keyring_cli.py
+from typing import List, Optional
 
-from ..keyring_manager import KeyringManager
+import typer
+from rich.console import Console
+from rich.panel import Panel
+from rich.syntax import Syntax
+import json
 
-# import logging
+from ..backends.keyring import KeyringBackend
+from ..exceptions import CredentialBridgeError
+
+app = typer.Typer(name="keyring", help="System keyring secret operations", no_args_is_help=True)
+console = Console()
+err_console = Console(stderr=True)
 
 
-def handle_commands(manager, action, service_name, name, secret):
-    if action in ["add", "update"]:
-        if not secret:
-            print("ℹ️ Password is required for adding or updating credentials❗")
-            return
-        if action == "add":
-            try:
-                manager.add_secret(name, secret)
-                print(f"👍 Credentials successfully added: \nSystem: {service_name}\nName: {name}\nSecret: {secret}")
-            except Exception as e:
-                print(f"ℹ️ Failed to add {name} for {service_name}: {e}❗")
-        else:
-            try:
-                manager.update_secret(name, secret)
-                print(f"👍 Credentials successfully updated: \nSystem: {service_name}\nName: {name}\nSecret: {secret}")
-            except Exception as e:
-                print(f"ℹ️ Failed to update {name} for {service_name}: {e}❗")
-    elif action == "get":
-        try:
-            secret_value = manager.get_secret(name)
-            if secret_value:
-                print(
-                    f"👍 Credentials successfully retrieved: \nSystem: {service_name}\nName: {name}\nSecret: {secret_value}"
-                )
-            else:
-                print(f"ℹ️ No secret found for {name}❗")
-        except Exception as e:
-            print(f"ℹ️ Failed to retrieve {name} for {service_name}: {e}❗")
-    elif action == "delete":
-        try:
-            manager.delete_secret(name)
-            print(f"👍 Credentials successfully deleted: \nSystem: {service_name}\nName: {name}")
-        except Exception as e:
-            print(f"ℹ️ Failed to delete {name} for {service_name}: {e}❗")
+@app.command()
+def add(
+    name: str = typer.Argument(..., help="Secret key name"),
+    secret: Optional[List[str]] = typer.Option(None, "--secret", help="KEY=value pairs"),
+    service_name: str = typer.Option(..., "--service-name", "-s", help="Keyring service name"),
+):
+    """Add a secret to the system keyring."""
+    if not secret:
+        typer.echo("Error: --secret is required", err=True)
+        raise typer.Exit(1)
+    backend = KeyringBackend(service_name=service_name)
+    secret_dict = dict(s.split("=", 1) for s in secret)
+    try:
+        backend.add_secret(name, secret_dict)
+        console.print(Panel(f"[green]✓[/green] Secret [bold]{name}[/bold] added.", title="Success"))
+    except CredentialBridgeError as e:
+        err_console.print(Panel(f"[red]{e}[/red]", title="Error"))
+        raise typer.Exit(1)
+
+
+@app.command()
+def get(
+    name: str = typer.Argument(..., help="Secret key name"),
+    service_name: str = typer.Option(..., "--service-name", "-s"),
+):
+    """Retrieve a secret from the system keyring."""
+    backend = KeyringBackend(service_name=service_name)
+    try:
+        result = backend.get_secret(name)
+        syntax = Syntax(json.dumps(result, indent=2), "json", theme="monokai")
+        console.print(Panel(syntax, title=f"[bold]{name}[/bold]"))
+    except CredentialBridgeError as e:
+        err_console.print(Panel(f"[red]{e}[/red]", title="Error"))
+        raise typer.Exit(1)
+
+
+@app.command()
+def update(
+    name: str = typer.Argument(..., help="Secret key name"),
+    secret: Optional[List[str]] = typer.Option(None, "--secret", help="KEY=value pairs"),
+    service_name: str = typer.Option(..., "--service-name", "-s"),
+):
+    """Update an existing keyring secret."""
+    if not secret:
+        typer.echo("Error: --secret is required", err=True)
+        raise typer.Exit(1)
+    backend = KeyringBackend(service_name=service_name)
+    secret_dict = dict(s.split("=", 1) for s in secret)
+    try:
+        backend.update_secret(name, secret_dict)
+        console.print(Panel(f"[green]✓[/green] Secret [bold]{name}[/bold] updated.", title="Success"))
+    except CredentialBridgeError as e:
+        err_console.print(Panel(f"[red]{e}[/red]", title="Error"))
+        raise typer.Exit(1)
+
+
+@app.command()
+def delete(
+    name: str = typer.Argument(..., help="Secret key name"),
+    service_name: str = typer.Option(..., "--service-name", "-s"),
+    confirm: bool = typer.Option(False, "--yes", "-y"),
+):
+    """Delete a secret from the system keyring."""
+    if not confirm:
+        typer.confirm(f"Delete secret '{name}'?", abort=True)
+    backend = KeyringBackend(service_name=service_name)
+    try:
+        backend.delete_secret(name)
+        console.print(Panel(f"[green]✓[/green] Secret [bold]{name}[/bold] deleted.", title="Success"))
+    except CredentialBridgeError as e:
+        err_console.print(Panel(f"[red]{e}[/red]", title="Error"))
+        raise typer.Exit(1)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Keyring CLI")
-    parser.add_argument("action", choices=["add", "get", "delete", "update"], help="Action to perform")
-    parser.add_argument("--service-name", required=True, help="Service name for the credential")
-    parser.add_argument("--name", help="Name of the secret")
-    parser.add_argument("--secret", help="Value of the secret")
-
-    args = parser.parse_args()
-
-    # logging.basicConfig(level=logging.DEBUG)
-    # logger = logging.getLogger(__name__)
-
-    manager = KeyringManager(service_name=args.service_name)
-
-    handle_commands(manager, args.action, args.service_name, args.name, args.secret)
-
-
-if __name__ == "__main__":
-    main()
+    app()
