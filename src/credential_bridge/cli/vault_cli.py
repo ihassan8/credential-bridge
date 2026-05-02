@@ -1,155 +1,153 @@
-import argparse
+# src/credential_bridge/cli/vault_cli.py
+from typing import List, Optional
+
+import typer
+from rich.console import Console
+from rich.panel import Panel
+from rich.syntax import Syntax
+from rich.table import Table
 import json
 
-from prompt_toolkit import print_formatted_text
-from prompt_toolkit.formatted_text import HTML
-from prompt_toolkit.styles import Style
+from ..backends.vault import VaultBackend
+from ..exceptions import CredentialBridgeError
 
-# from ..utils import get_vault_credentials
-from ..vault_manager import VaultManager
-
-# import logging
+app = typer.Typer(name="vault", help="HashiCorp Vault secret operations", no_args_is_help=True)
+console = Console()
+err_console = Console(stderr=True)
 
 
-json_style = Style.from_dict(
-    {
-        "output": "fg:ansiyellow italic",
-    }
-)
+def _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point):
+    try:
+        return VaultBackend(
+            vault_url=vault_url,
+            vault_token=vault_token,
+            vault_role_id=role_id,
+            vault_secret_id=secret_id,
+            service_name=service_name,
+            mount_point=mount_point,
+        )
+    except CredentialBridgeError as e:
+        err_console.print(Panel(f"[red]{e}[/red]", title="Configuration Error"))
+        raise typer.Exit(1)
 
 
-def handle_commands(manager, action, service_name, secret, versions=None):
-    if action == "add":
-        try:
-            manager.add_secret(service_name, secret)
-            print(f"👍 Credentials successfully added: \nName: {service_name}\nSecret: {secret}")
-        except Exception as e:
-            print(f"ℹ️ Failed to add {secret} for {service_name}: {e}❗")
-    elif action == "get":
-        try:
-            secret_value = manager.get_secret(service_name)
-            if secret_value:
-                print(f"👍 Credentials successfully retrieved for {service_name}:")
-                formated_json = json.dumps(secret_value, indent=4)
-                print_formatted_text(HTML(f"<output>{formated_json}</output>"), style=json_style)
-            else:
-                print(f"ℹ️ No credentials found for {service_name}❗")
-        except Exception as e:
-            print(f"ℹ️ Failed to retrieve credentials for {service_name}: {e}❗")
-    elif action == "get-config":
-        try:
-            secret_value = manager.get_config(service_name)
-            if secret_value:
-                print(f"👍 Configuration successfully retrieved: \nName: {service_name}\nSecret: {secret_value}")
-            else:
-                print(f"ℹ️ No Configuration found for {service_name}❗")
-        except Exception as e:
-            print(f"ℹ️ Failed to retrieve configuration for {service_name}: {e}❗")
-    elif action == "delete":
-        try:
-            manager.delete_secret(service_name)
-            print(f"👍 Credentials successfully deleted: \nName: {service_name}")
-        except Exception as e:
-            print(f"ℹ️ Failed to delete credentials for {service_name}: {e}❗")
-    elif action == "update":
-        try:
-            manager.update_secret(service_name, secret)
-            print(f"👍 Credentials successfully updated: \nName: {service_name}\nCredentials: {secret}")
-        except Exception as e:
-            print(f"ℹ️ Failed to update {secret} for {service_name}: {e}❗")
-    elif action == "list":
-        try:
-            secrets = manager.list_secrets(service_name)
-            print(f"👍 Secrets listed: \nName: {service_name}\nCredentials: {secrets}")
-        except Exception as e:
-            print(f"ℹ️ Failed to list secrets in path '{service_name}': {e}❗")
-    elif action == "read-metadata":
-        try:
-            metadata = manager.read_secret_metadata(service_name)
-            if metadata:
-                print(f"👍 Metadata successfully retrieved for {service_name}:")
-                formated_json = json.dumps(metadata, indent=4)
-                print_formatted_text(HTML(f"<output>{formated_json}</output>"), style=json_style)
-            else:
-                print(f"ℹ️ No metadata found for {service_name}❗")
-        except Exception as e:
-            print(f"ℹ️ Failed to read metadata for secret '{service_name}': {e}❗")
-    elif action == "delete-versions":
-        try:
-            manager.delete_secret_versions(service_name, versions)
-            print(f"👍 Deleted versions {versions} of secret '{service_name}'")
-        except Exception as e:
-            print(f"ℹ️ Failed to delete versions {versions} of secret '{service_name}': {e}❗")
-    elif action == "undelete-versions":
-        try:
-            manager.undelete_secret_versions(service_name, versions)
-            print(f"👍 Undeleted versions {versions} of secret '{service_name}'")
-        except Exception as e:
-            print(f"ℹ️ Failed to undelete versions {versions} of secret '{service_name}': {e}❗")
-    elif action == "destroy-versions":
-        try:
-            manager.destroy_secret_versions(service_name, versions)
-            print(f"👍 Destroyed versions {versions} of secret '{service_name}'")
-        except Exception as e:
-            print(f"ℹ️ Failed to destroy versions {versions} of secret '{service_name}': {e}❗")
+@app.command()
+def add(
+    name: str = typer.Argument(..., help="Secret path"),
+    secret: Optional[List[str]] = typer.Option(None, "--secret", help="KEY=value pairs"),
+    vault_url: Optional[str] = typer.Option(None, "--vault-url", envvar="VAULT_ADDR"),
+    vault_token: Optional[str] = typer.Option(None, "--vault-token", envvar="VAULT_TOKEN"),
+    role_id: Optional[str] = typer.Option(None, "--vault-role-id", envvar="VAULT_ROLE_ID"),
+    secret_id: Optional[str] = typer.Option(None, "--vault-secret-id", envvar="VAULT_SECRET_ID"),
+    service_name: str = typer.Option("default_service", "--service-name"),
+    mount_point: str = typer.Option("secret", "--mount-point"),
+):
+    """Add a secret to Vault."""
+    if not secret:
+        typer.echo("Error: --secret is required (KEY=value)", err=True)
+        raise typer.Exit(1)
+    backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
+    secret_dict = dict(s.split("=", 1) for s in secret)
+    try:
+        backend.add_secret(name, secret_dict)
+        console.print(Panel(f"[green]✓[/green] Secret [bold]{name}[/bold] added.", title="Success"))
+    except CredentialBridgeError as e:
+        err_console.print(Panel(f"[red]{e}[/red]", title="Error"))
+        raise typer.Exit(1)
+
+
+@app.command()
+def get(
+    name: str = typer.Argument(..., help="Secret path"),
+    vault_url: Optional[str] = typer.Option(None, "--vault-url", envvar="VAULT_ADDR"),
+    vault_token: Optional[str] = typer.Option(None, "--vault-token", envvar="VAULT_TOKEN"),
+    role_id: Optional[str] = typer.Option(None, "--vault-role-id", envvar="VAULT_ROLE_ID"),
+    secret_id: Optional[str] = typer.Option(None, "--vault-secret-id", envvar="VAULT_SECRET_ID"),
+    service_name: str = typer.Option("default_service", "--service-name"),
+    mount_point: str = typer.Option("secret", "--mount-point"),
+):
+    """Retrieve a secret from Vault."""
+    backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
+    try:
+        result = backend.get_secret(name)
+        syntax = Syntax(json.dumps(result, indent=2), "json", theme="monokai")
+        console.print(Panel(syntax, title=f"[bold]{name}[/bold]"))
+    except CredentialBridgeError as e:
+        err_console.print(Panel(f"[red]{e}[/red]", title="Error"))
+        raise typer.Exit(1)
+
+
+@app.command()
+def update(
+    name: str = typer.Argument(..., help="Secret path"),
+    secret: Optional[List[str]] = typer.Option(None, "--secret", help="KEY=value pairs"),
+    vault_url: Optional[str] = typer.Option(None, "--vault-url", envvar="VAULT_ADDR"),
+    vault_token: Optional[str] = typer.Option(None, "--vault-token", envvar="VAULT_TOKEN"),
+    role_id: Optional[str] = typer.Option(None, "--vault-role-id", envvar="VAULT_ROLE_ID"),
+    secret_id: Optional[str] = typer.Option(None, "--vault-secret-id", envvar="VAULT_SECRET_ID"),
+    service_name: str = typer.Option("default_service", "--service-name"),
+    mount_point: str = typer.Option("secret", "--mount-point"),
+):
+    """Update an existing Vault secret."""
+    if not secret:
+        typer.echo("Error: --secret is required", err=True)
+        raise typer.Exit(1)
+    backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
+    secret_dict = dict(s.split("=", 1) for s in secret)
+    try:
+        backend.update_secret(name, secret_dict)
+        console.print(Panel(f"[green]✓[/green] Secret [bold]{name}[/bold] updated.", title="Success"))
+    except CredentialBridgeError as e:
+        err_console.print(Panel(f"[red]{e}[/red]", title="Error"))
+        raise typer.Exit(1)
+
+
+@app.command()
+def delete(
+    name: str = typer.Argument(..., help="Secret path"),
+    vault_url: Optional[str] = typer.Option(None, "--vault-url", envvar="VAULT_ADDR"),
+    vault_token: Optional[str] = typer.Option(None, "--vault-token", envvar="VAULT_TOKEN"),
+    role_id: Optional[str] = typer.Option(None, "--vault-role-id", envvar="VAULT_ROLE_ID"),
+    secret_id: Optional[str] = typer.Option(None, "--vault-secret-id", envvar="VAULT_SECRET_ID"),
+    service_name: str = typer.Option("default_service", "--service-name"),
+    mount_point: str = typer.Option("secret", "--mount-point"),
+    confirm: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+):
+    """Permanently delete a Vault secret."""
+    if not confirm:
+        typer.confirm(f"Delete secret '{name}' and ALL versions?", abort=True)
+    backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
+    try:
+        backend.delete_secret(name)
+        console.print(Panel(f"[green]✓[/green] Secret [bold]{name}[/bold] deleted.", title="Success"))
+    except CredentialBridgeError as e:
+        err_console.print(Panel(f"[red]{e}[/red]", title="Error"))
+        raise typer.Exit(1)
+
+
+@app.command(name="list")
+def list_secrets(
+    path: str = typer.Argument("", help="Path prefix"),
+    vault_url: Optional[str] = typer.Option(None, "--vault-url", envvar="VAULT_ADDR"),
+    vault_token: Optional[str] = typer.Option(None, "--vault-token", envvar="VAULT_TOKEN"),
+    role_id: Optional[str] = typer.Option(None, "--vault-role-id", envvar="VAULT_ROLE_ID"),
+    secret_id: Optional[str] = typer.Option(None, "--vault-secret-id", envvar="VAULT_SECRET_ID"),
+    service_name: str = typer.Option("default_service", "--service-name"),
+    mount_point: str = typer.Option("secret", "--mount-point"),
+):
+    """List secrets at a Vault path."""
+    backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
+    try:
+        keys = backend.list_secrets(path)
+        table = Table(title=f"Secrets at '{path or '/'}'")
+        table.add_column("Key", style="cyan")
+        for k in keys:
+            table.add_row(k)
+        console.print(table)
+    except CredentialBridgeError as e:
+        err_console.print(Panel(f"[red]{e}[/red]", title="Error"))
+        raise typer.Exit(1)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Vault CLI")
-    parser.add_argument(
-        "action",
-        choices=[
-            "add",
-            "get",
-            "get-config",
-            "delete",
-            "update",
-            "list",
-            "read-metadata",
-            "delete-versions",
-            "undelete-versions",
-            "destroy-versions",
-        ],
-        help="Action to perform",
-    )
-    parser.add_argument("--vault-token", help="Vault token for authentication")
-    parser.add_argument("--vault-role-id", help="Vault AppRole role ID for authentication")
-    parser.add_argument("--vault-secret-id", help="Vault AppRole secret ID for authentication")
-    parser.add_argument(
-        "--service-name", default="default_service", help="Service name for the secret (default: default_service)"
-    )
-    parser.add_argument("--secrets", action="append", help="Secrets to add.update in the form key=value")
-    parser.add_argument("--versions", action="append", type=int, help="Versions of the secret to operate on")
-    parser.add_argument("--mount-point", help="Mount point for Vault secrets")
-
-    args = parser.parse_args()
-
-    # logging.basicConfig(level=logging.INFO)
-    # logger = logging.getLogger(__name__)
-
-    # vault_token, vault_role_id, vault_secret_id = get_vault_credentials()
-
-    # Use provided credentials or fall back to config file
-    # vault_token = args.vault_token or vault_token
-    # vault_role_id = args.vault_role_id or vault_role_id
-    # vault_secret_id = args.vault_secret_id or vault_secret_id
-
-    manager = VaultManager(
-        vault_token=args.vault_token,
-        vault_role_id=args.vault_role_id,
-        vault_secret_id=args.vault_secret_id,
-        service_name=args.service_name,
-        mount_point=args.mount_point,
-    )
-
-    secret_data = {}
-    if args.secrets:
-        for secret in args.secrets:
-            key, value = secret.split("=", 1)
-            secret_data[key] = value
-
-    handle_commands(manager, args.action, args.service_name, secret_data, args.versions)
-
-
-if __name__ == "__main__":
-    main()
+    app()
