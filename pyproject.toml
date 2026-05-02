@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "credential-bridge" 
+description = "Credential Bridge is a Python package that interact with HashiCorp Vault and Keyring, allowing for secure management of secrets."
+authors = [
+    {name = "Vertex AI Automations", email = "info@vertexaiautomations.com"}
+]
+readme = "README.md"
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Logging",
+    "Typing :: Typed",
+]
+requires-python = ">=3.8"
+keywords = ["vault", "keyring", "credentials", "authentications", "wizard", "secrets"]
+
+dynamic = ["version", "dependencies"]
+license = 'MIT'
+license-files = ['LICENSE']
+
+[project.urls]
+homepage = "https://www.vertexaiautomations.com"
+documentation = "https://vertex-ai-automations.github.io/credential-bridge"
+repository = 'https://github.com/vertex-ai-automations/credential-bridge'
+issues = "https://github.com/vertex-ai-automations/credential-bridge/issues/new"
+
+[project.scripts]
+[project.scripts]
+keyring-cli = "credential_bridge.cli.keyring_cli:main"
+vault-cli = "credential_bridge.cli.vault_cli:main"
+run-wizard = "credential_bridge.prompt_wizard:main"
+
+
+[project.optional-dependencies]
+fastapi = ["starlette>=0.27.0"]
+
+# version and requirements are dynamically pulled from setup.py. We may enable this in future if setup.py gets deprecated
+# [tool.setuptools.dynamic]
+# dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools_scm]
+# Auto generate _version.py with the corresponding git tag
+version_file = "src/credential_bridge/_version.py"
+

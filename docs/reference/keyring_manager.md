@@ -1,0 +1,1 @@
+::: credential_bridge.keyring_manager
