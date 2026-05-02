@@ -37,17 +37,17 @@ repository = 'https://github.com/vertex-ai-automations/credential-bridge'
 issues = "https://github.com/vertex-ai-automations/credential-bridge/issues/new"
 
 [project.scripts]
+cb          = "credential_bridge.cli.main:main"
+vault-cli   = "credential_bridge.cli.vault_cli:main"
 keyring-cli = "credential_bridge.cli.keyring_cli:main"
-vault-cli = "credential_bridge.cli.vault_cli:main"
-run-wizard = "credential_bridge.prompt_wizard:main"
+run-wizard  = "credential_bridge.prompt_wizard:main"
 
 
 [project.optional-dependencies]
 fastapi = ["starlette>=0.27.0"]
 
-# version and requirements are dynamically pulled from setup.py. We may enable this in future if setup.py gets deprecated
-# [tool.setuptools.dynamic]
-# dependencies = {file = ["requirements.txt"]}
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools_scm]
 # Auto generate _version.py with the corresponding git tag
