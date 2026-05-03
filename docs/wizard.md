@@ -1,31 +1,126 @@
 # Interactive Wizard
 
-The interactive wizard provides a menu-driven interface for managing secrets without memorizing CLI flags.
+The interactive wizard provides a menu-driven interface for all backend operations without memorising CLI flags. It uses Rich for styled output and prompt_toolkit for smart input with tab-completion and command history.
 
 ## Launch
 
 ```bash
 cb wizard
-# or
 run-wizard
+python -m credential_bridge wizard
 ```
 
-## Supported backends
+## Welcome screen
 
-- **keyring** — system keyring operations (add/get/update/delete)
-- **vault** — HashiCorp Vault operations (add/get/update/delete/list/metadata/versions)
-- **env** — .env file operations (add/get/update/delete/list)
+On launch the wizard renders a branded banner and drops into the main menu:
 
-## Vault authentication
+```
+▶ Backend  (keyring / vault / env / exit):
+```
 
-When you select the `vault` backend, the wizard will check for existing saved credentials in `~/.vault_config.json`. If none exist, it prompts you to enter a token or AppRole credentials. Valid credentials are saved for future sessions.
+Tab-complete any option or type it in full. Arrow-up recalls previous entries (session history is maintained).
 
-!!! security "VAULT_ADDR required"
-    Set the `VAULT_ADDR` environment variable before launching the wizard.
+## Keyring
 
-## Features
+```
+[Keyring]  (add / get / update / delete / back):  add
+  Service name:   myapp
+  Secret name:    github_token
+  Secret value:   ········        ← masked input
+  ✓  Added github_token to keyring service 'myapp'.
+```
 
-- Tab-completion for all menu options
-- Credential caching across sessions
-- Masked input for sensitive values
-- Clear error messages
+All secret values are masked with `●` as you type.
+
+## Vault
+
+### Authentication
+
+Select an auth type first:
+
+```
+[Vault]  (vault_token / approle / back):  vault_token
+  Vault Token:  ········
+  ✓  Vault token saved.
+```
+
+The token is validated against Vault before being saved. Saved credentials are loaded automatically on the next session — you won't be prompted again unless they expire.
+
+!!! tip "VAULT_ADDR required"
+    Set `VAULT_ADDR` before launching the wizard:
+    ```bash
+    export VAULT_ADDR=https://vault.example.com
+    ```
+
+### Operations
+
+After authentication, the action menu appears:
+
+```
+[Vault › vault_token]  (add/get/update/delete/list/… /back):  add
+  Service name (tag):              myapp
+  Secret path (e.g. myapp/db):    myapp/database
+  Number of key-value pairs:      2
+  Key 1:    user
+  Value 1:  ········
+  Key 2:    pass
+  Value 2:  ········
+  ✓  Secret myapp/database added.
+```
+
+Available actions:
+
+| Action | Description |
+|---|---|
+| `add` | Add a new secret |
+| `get` | Retrieve and display a secret |
+| `update` | Update existing fields |
+| `delete` | Permanently delete all versions |
+| `list` | List secrets at a path |
+| `read-metadata` | Show version metadata |
+| `delete-versions` | Soft-delete specific versions |
+| `undelete-versions` | Restore soft-deleted versions |
+| `destroy-versions` | Permanently destroy specific versions |
+| `get-config` | Show mount configuration |
+| `back` | Return to backend selection |
+
+### Result display
+
+Get results are shown as syntax-highlighted JSON:
+
+```
+╭──────────────── myapp/database ────────────────╮
+│ {                                              │
+│   "user": "admin",                             │
+│   "pass": "s3cr3t"                             │
+│ }                                              │
+╰────────────────────────────────────────────────╯
+```
+
+## .env File
+
+```
+[.env]  .env file path  (default: .env):  config/.env
+
+[.env › config/.env]  (add / get / update / delete / list / back):  list
+  Keys in config/.env
+ ┌─────────┐
+ │ Key     │
+ ├─────────┤
+ │ DB_HOST │
+ │ DB_PORT │
+ └─────────┘
+```
+
+The `.env` path is asked once per session — you don't need to re-enter it for each operation.
+
+## Exiting
+
+Type `exit` at the main menu or press `Ctrl+C` / `Ctrl+D` at any prompt to exit gracefully.
+
+## Tips
+
+- **Tab-completion**: All menu options support tab-completion
+- **History**: Press `↑` to recall previous entries within the session
+- **Masked input**: Vault tokens, AppRole credentials, and secret values are always masked
+- **Breadcrumbs**: The prompt shows your current location (e.g. `[Vault › approle]`)
