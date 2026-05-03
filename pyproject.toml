@@ -53,7 +53,6 @@ where = ["src"]
 dependencies = {file = ["requirements.txt"]}
 optional-dependencies.dev = {file = ["requirements-dev.txt"]}
 optional-dependencies.docs = {file = ["requirements-docs.txt"]}
-optional-dependencies.fastapi = {file = ["requirements-fastapi.txt"]}
 
 [tool.setuptools_scm]
 version_file = "src/credential_bridge/_version.py"
