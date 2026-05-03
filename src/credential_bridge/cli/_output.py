@@ -1,12 +1,23 @@
 # src/credential_bridge/cli/_output.py
 """Shared Rich output helpers — imported by all CLI modules."""
 import json
+import sys
 from typing import Any, Dict, List
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
+
+# On Windows the default console codepage is often cp1252 which cannot encode
+# many Unicode characters (✓, ✗, box-drawing lines used by Rich panels).
+# Reconfigure stdout/stderr to UTF-8 so Rich renders correctly.
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+        sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+    except AttributeError:
+        pass  # reconfigure not available in some environments (e.g. redirected streams)
 
 console = Console()
 err_console = Console(stderr=True)

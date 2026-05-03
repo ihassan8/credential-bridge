@@ -27,7 +27,7 @@ class KeyringBackend(BaseSecretBackend):
         self.mask = mask
         if logger and not isinstance(logger, PyLogShield):
             raise ConfigurationError("logger must be a PyLogShield instance.")
-        self.logger = logger or get_logger(name="credential_bridge", log_level=log_level)
+        self.logger = logger or get_logger(name="credential_bridge", log_level=log_level, force=True)
 
     def __repr__(self) -> str:
         return f"KeyringBackend(service_name={self.service_name!r})"

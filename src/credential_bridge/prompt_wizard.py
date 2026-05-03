@@ -2,6 +2,14 @@
 import sys
 from typing import Optional
 
+# Ensure Rich can render Unicode (box lines, checkmarks) on Windows terminals
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+        sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+    except AttributeError:
+        pass
+
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.formatted_text import HTML
