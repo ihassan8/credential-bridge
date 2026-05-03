@@ -50,8 +50,10 @@ def print_result(data: Dict[str, Any], title: str = "") -> None:
 
 def print_table(rows: List[str], title: str = "", column: str = "Key") -> None:
     """Print a list of strings as a Rich table."""
+    # min_width ensures the title always fits on one line regardless of content width
+    min_width = len(title) + 4 if title else 20
     table = Table(title=title, border_style="cyan", show_header=True,
-                  header_style="bold cyan")
+                  header_style="bold cyan", min_width=min_width)
     table.add_column(column, style="cyan")
     for row in rows:
         table.add_row(row)

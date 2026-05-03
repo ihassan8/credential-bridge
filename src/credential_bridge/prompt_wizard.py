@@ -100,7 +100,9 @@ def _print_result_dict(data: dict, title: str = "") -> None:
 
 def _print_result_list(keys: list, title: str = "") -> None:
     """Display a list of keys as a Rich table."""
-    table = Table(title=title, border_style="cyan", show_header=True, header_style="bold cyan")
+    min_width = len(title) + 4 if title else 20
+    table = Table(title=title, border_style="cyan", show_header=True,
+                  header_style="bold cyan", min_width=min_width)
     table.add_column("Key", style="cyan")
     for k in keys:
         table.add_row(str(k))
