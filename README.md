@@ -1,7 +1,7 @@
 <a name="readme-top"></a>
 
 <div align="center">
-<img src="https://github.com/vertex-ai-automations/credential-bridge/raw/main/docs/img/credential_bridge.png" alt="Credential Bridge Logo" width="420">
+<img src="https://github.com/vertex-ai-automations/credential-bridge/raw/main/docs/img/credential_bridge.png" alt="Credential Bridge Logo" width="320">
 
 <br/>
 
