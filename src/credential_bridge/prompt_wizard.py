@@ -220,13 +220,13 @@ def configure_keyring() -> None:
             _error(f"Unknown action '{action}'.")
             continue
 
-        service_name = _prompt("<b><ansibrightgreen>  Service name:</ansibrightgreen>  ")
-        name = _prompt("<b><ansibrightgreen>  Secret name:</ansibrightgreen>   ")
+        service_name = _prompt("<b><ansibrightgreen>  Service name:</ansibrightgreen></b>  ")
+        name = _prompt("<b><ansibrightgreen>  Secret name:</ansibrightgreen></b>   ")
         secret: Optional[str] = None
 
         if action in ["add", "update"]:
             secret = _prompt(
-                "<b><ansibrightgreen>  Secret value:</ansibrightgreen>  ",
+                "<b><ansibrightgreen>  Secret value:</ansibrightgreen></b>  ",
                 is_password=True,
             )
 
@@ -259,7 +259,7 @@ def configure_vault() -> None:
         if auth_type == "vault_token":
             if not vault_token:
                 vault_token = _prompt(
-                    "<b><ansibrightgreen>  Vault Token:</ansibrightgreen>  ",
+                    "<b><ansibrightgreen>  Vault Token:</ansibrightgreen></b>  ",
                     is_password=True,
                 )
                 if is_vault_cred_valid(vault_token=vault_token):
@@ -272,7 +272,7 @@ def configure_vault() -> None:
                 if not is_vault_cred_valid(vault_token=vault_token):
                     _info(f"Existing token (...{vault_token[-4:]}) has expired.")
                     vault_token = _prompt(
-                        "<b><ansibrightgreen>  New Vault Token:</ansibrightgreen>  ",
+                        "<b><ansibrightgreen>  New Vault Token:</ansibrightgreen></b>  ",
                         is_password=True,
                     )
                     if is_vault_cred_valid(vault_token=vault_token):
@@ -287,11 +287,11 @@ def configure_vault() -> None:
         elif auth_type == "approle":
             if not (vault_role_id and vault_secret_id):
                 vault_role_id = _prompt(
-                    "<b><ansibrightgreen>  Role ID:</ansibrightgreen>    ",
+                    "<b><ansibrightgreen>  Role ID:</ansibrightgreen></b>    ",
                     is_password=True,
                 )
                 vault_secret_id = _prompt(
-                    "<b><ansibrightgreen>  Secret ID:</ansibrightgreen>  ",
+                    "<b><ansibrightgreen>  Secret ID:</ansibrightgreen></b>  ",
                     is_password=True,
                 )
                 if is_vault_cred_valid(role_id=vault_role_id, secret_id=vault_secret_id):
@@ -306,11 +306,11 @@ def configure_vault() -> None:
                         f"Existing AppRole (...{vault_role_id[-4:]}) has expired."
                     )
                     vault_role_id = _prompt(
-                        "<b><ansibrightgreen>  New Role ID:</ansibrightgreen>    ",
+                        "<b><ansibrightgreen>  New Role ID:</ansibrightgreen></b>    ",
                         is_password=True,
                     )
                     vault_secret_id = _prompt(
-                        "<b><ansibrightgreen>  New Secret ID:</ansibrightgreen>  ",
+                        "<b><ansibrightgreen>  New Secret ID:</ansibrightgreen></b>  ",
                         is_password=True,
                     )
                     if is_vault_cred_valid(role_id=vault_role_id, secret_id=vault_secret_id):
@@ -361,10 +361,10 @@ def _vault_action_loop(auth_label: str) -> None:
             continue
 
         service_name = _prompt(
-            "<b><ansibrightgreen>  Service name (tag):</ansibrightgreen>    "
+            "<b><ansibrightgreen>  Service name (tag):</ansibrightgreen></b>    "
         )
         secret_path = _prompt(
-            "<b><ansibrightgreen>  Secret path (e.g. myapp/db):</ansibrightgreen>  "
+            "<b><ansibrightgreen>  Secret path (e.g. myapp/db):</ansibrightgreen></b>  "
         )
 
         secret_data: dict = {}
@@ -375,7 +375,7 @@ def _vault_action_loop(auth_label: str) -> None:
                 try:
                     num = int(
                         _prompt(
-                            "<b><ansibrightgreen>  Number of key-value pairs:</ansibrightgreen>  "
+                            "<b><ansibrightgreen>  Number of key-value pairs:</ansibrightgreen></b>  "
                         )
                     )
                     break
@@ -383,9 +383,9 @@ def _vault_action_loop(auth_label: str) -> None:
                     _error("Please enter a numeric value.")
 
             for i in range(num):
-                k = _prompt(f"<b><ansibrightgreen>  Key {i + 1}:</ansibrightgreen>    ")
+                k = _prompt(f"<b><ansibrightgreen>  Key {i + 1}:</ansibrightgreen></b>    ")
                 v = _prompt(
-                    f"<b><ansibrightgreen>  Value {i + 1}:</ansibrightgreen>  ",
+                    f"<b><ansibrightgreen>  Value {i + 1}:</ansibrightgreen></b>  ",
                     is_password=True,
                 )
                 secret_data[k] = v
@@ -395,13 +395,13 @@ def _vault_action_loop(auth_label: str) -> None:
                 try:
                     num = int(
                         _prompt(
-                            "<b><ansibrightgreen>  Number of versions:</ansibrightgreen>  "
+                            "<b><ansibrightgreen>  Number of versions:</ansibrightgreen></b>  "
                         )
                     )
                     versions = []
                     for _ in range(num):
                         versions.append(
-                            int(_prompt("<b><ansibrightgreen>  Version number:</ansibrightgreen>  "))
+                            int(_prompt("<b><ansibrightgreen>  Version number:</ansibrightgreen></b>  "))
                         )
                     break
                 except ValueError:
@@ -416,7 +416,7 @@ def _vault_action_loop(auth_label: str) -> None:
 def configure_env() -> None:
     _section(".env File")
     env_path = _prompt(
-        "<b><ansibrightgreen>  .env file path</ansibrightgreen>"
+        "<b><ansibrightgreen>  .env file path</ansibrightgreen></b>"
         "  <ansiwhite>(default: .env):</ansiwhite>  "
     ) or ".env"
 
@@ -447,8 +447,8 @@ def configure_env() -> None:
                 _print_result_list(keys, title=f"Keys in {env_path}")
 
             elif action in ["add", "update"]:
-                name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen>   ")
-                value = _prompt("<b><ansibrightgreen>  Value:</ansibrightgreen>      ")
+                name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen></b>   ")
+                value = _prompt("<b><ansibrightgreen>  Value:</ansibrightgreen></b>      ")
                 if action == "add":
                     backend.add_secret(name, {name: value})
                 else:
@@ -456,12 +456,12 @@ def configure_env() -> None:
                 _success(f"{action.capitalize()} successful: [bold]{name}[/bold]")
 
             elif action == "get":
-                name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen>  ")
+                name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen></b>  ")
                 result = backend.get_secret(name)
                 _print_result_dict(result, title=name)
 
             elif action == "delete":
-                name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen>  ")
+                name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen></b>  ")
                 backend.delete_secret(name)
                 _success(f"Deleted [bold]{name}[/bold] from {env_path}.")
 
