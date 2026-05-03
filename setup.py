@@ -6,6 +6,7 @@ from setuptools import setup
 package = "src/credential_bridge"
 VERSION_FILE = os.path.join(package, "_version.py")
 REQUIREMENTS_FILE = os.path.join("requirements.txt")
+REQUIREMENTS_DEV_FILE = os.path.join("requirements-dev.txt")
 MODE = "scm"  # Use can select the option 'manual' to read from version.py or 'scm' to autmatically read from .git metedata version
 
 
@@ -39,6 +40,9 @@ def auto_version_toggle(mode):
 
 setup_args = {
     "install_requires": get_package_requirements(REQUIREMENTS_FILE),
+    "extras_require": {
+        "dev": get_package_requirements(REQUIREMENTS_DEV_FILE),
+    },
 }
 
 version_args = auto_version_toggle(MODE)

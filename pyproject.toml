@@ -44,6 +44,7 @@ run-wizard  = "credential_bridge.prompt_wizard:main"
 
 
 [project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-mock>=3.0"]
 fastapi = ["starlette>=0.27.0"]
 
 [tool.setuptools.dynamic]
