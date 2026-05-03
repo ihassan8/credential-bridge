@@ -122,6 +122,6 @@ The wizard guides you through all operations with tab-completion and masked secr
 
 ## What's next?
 
-- [Backend comparison](../backends/comparison.md) — which backend fits your use case
+- [Backend comparison](../backends/comparison/) — which backend fits your use case
 - [SecretsManager](../secrets-manager.md) — facade API and custom backends
-- [CLI reference](../cli/cb.md) — all commands and flags
+- [CLI reference](../cli/cb/) — all commands and flags
