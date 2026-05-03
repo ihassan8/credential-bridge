@@ -18,8 +18,11 @@ pytest tests/unit/
 # Run integration tests (requires external services)
 pytest tests/integration/ -m integration
 
-# Serve docs locally
-mkdocs serve
+# Serve docs locally (Zensical — uses zensical.toml)
+zensical serve
+
+# Build docs
+zensical build
 
 # Lint
 ruff check src/

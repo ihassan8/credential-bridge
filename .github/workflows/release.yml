@@ -110,7 +110,7 @@ jobs:
       python-version: "3.11"
       run-tests: true
       test-command: "pytest tests/ -v --tb=short"
-      publish-target: "pypi"          # 'both' | 'pypi' | 'testpypi'
-      use-trusted-publishing: false    # set false to use PYPI_API_TOKEN instead
+      publish-target: "both"          # 'both' | 'pypi' | 'testpypi' — publishes to TestPyPI first, then PyPI
+      use-trusted-publishing: false    # set false to use PYPI_API_TOKEN instead (must be set in Settings → Secrets → Actions)
     secrets: inherit
 

@@ -15,3 +15,12 @@ def populated_env_file(tmp_path):
     env_file = tmp_path / ".env"
     env_file.write_text("EXISTING_KEY=existing_value\n", encoding="utf-8")
     return env_file
+
+
+@pytest.fixture(autouse=True)
+def clean_registry():
+    """Isolate SecretsManager._registry state between all tests."""
+    from credential_bridge.manager import SecretsManager
+    original = dict(SecretsManager._registry)
+    yield
+    SecretsManager._registry = original

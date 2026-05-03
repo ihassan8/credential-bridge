@@ -45,8 +45,12 @@ class EnvFileBackend(BaseSecretBackend):
 
     def _write_lines(self, lines: List[str]) -> None:
         tmp = self.path.parent / (self.path.name + ".tmp")
-        tmp.write_text("".join(lines), encoding=self.encoding)
-        os.replace(str(tmp), str(self.path))
+        try:
+            tmp.write_text("".join(lines), encoding=self.encoding)
+            os.replace(str(tmp), str(self.path))
+        except Exception:
+            tmp.unlink(missing_ok=True)
+            raise
 
     def _current_keys(self) -> Dict[str, str]:
         return dict(dotenv_values(self.path)) if self.path.exists() else {}
