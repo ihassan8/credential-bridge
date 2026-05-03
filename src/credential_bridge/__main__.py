@@ -1,3 +1,3 @@
-from .prompt_wizard import main
+from .cli.main import main
 
 main()
