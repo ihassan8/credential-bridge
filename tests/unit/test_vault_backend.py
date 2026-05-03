@@ -100,3 +100,115 @@ def test_list_secrets_empty_path(mock_hvac):
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
     result = backend.list_secrets()
     mock_hvac.secrets.kv.v2.list_secrets.assert_called_once_with(path="", mount_point="secret")
+
+
+# ---------------------------------------------------------------------------
+# 2a: AppRole authentication
+# ---------------------------------------------------------------------------
+
+def test_approle_authentication_success(mocker):
+    """AppRole auth path — different from token path."""
+    client = MagicMock()
+    client.is_authenticated.return_value = True
+    client.auth.approle.login.return_value = {
+        "auth": {"client_token": "s.approle-token"}
+    }
+    mocker.patch("credential_bridge.backends.vault.hvac.Client", return_value=client)
+    mocker.patch("credential_bridge.backends.vault.load_config", return_value={})
+    mocker.patch("credential_bridge.backends.vault.save_config")
+
+    backend = VaultBackend(
+        vault_url="https://vault.example.com",
+        vault_role_id="my-role-id",
+        vault_secret_id="my-secret-id",
+    )
+    assert backend.client.token == "s.approle-token"
+    client.auth.approle.login.assert_called_once_with(
+        role_id="my-role-id", secret_id="my-secret-id"
+    )
+
+
+def test_approle_auth_error_on_bad_credentials(mocker):
+    """AppRole returns no auth token → VaultAuthError."""
+    client = MagicMock()
+    client.auth.approle.login.return_value = {}   # no "auth" key
+    mocker.patch("credential_bridge.backends.vault.hvac.Client", return_value=client)
+    mocker.patch("credential_bridge.backends.vault.load_config", return_value={})
+    mocker.patch("credential_bridge.backends.vault.save_config")
+
+    with pytest.raises(VaultAuthError):
+        VaultBackend(
+            vault_url="https://vault.example.com",
+            vault_role_id="bad-role",
+            vault_secret_id="bad-secret",
+        )
+
+
+# ---------------------------------------------------------------------------
+# 2b: update_secret
+# ---------------------------------------------------------------------------
+
+def test_update_secret(mock_hvac):
+    backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
+    backend.update_secret("myapp/db", {"pass": "newpass"})
+    mock_hvac.secrets.kv.v2.patch.assert_called_once_with(
+        path="myapp/db",
+        secret={"pass": "newpass"},
+        mount_point="secret",
+    )
+
+
+# ---------------------------------------------------------------------------
+# 2c: token refresh
+# ---------------------------------------------------------------------------
+
+def test_refresh_token_renews_when_ttl_low(mock_hvac):
+    """Token with TTL < 300 should be renewed."""
+    mock_hvac.auth.token.lookup_self.return_value = {"data": {"ttl": 100}}
+    backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
+    backend._refresh_token_if_needed()
+    mock_hvac.auth.token.renew_self.assert_called_once_with(increment="0")
+
+
+def test_refresh_token_skips_when_ttl_ok(mock_hvac):
+    """Token with TTL >= 300 should not be renewed."""
+    mock_hvac.auth.token.lookup_self.return_value = {"data": {"ttl": 3600}}
+    backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
+    backend._refresh_token_if_needed()
+    mock_hvac.auth.token.renew_self.assert_not_called()
+
+
+def test_refresh_token_swallows_exception(mock_hvac):
+    """Failed token lookup should log a warning, not raise."""
+    mock_hvac.auth.token.lookup_self.side_effect = Exception("lookup failed")
+    backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
+    # Should not raise
+    backend._refresh_token_if_needed()
+
+
+# ---------------------------------------------------------------------------
+# 2d: persist parameter
+# ---------------------------------------------------------------------------
+
+def test_credentials_not_persisted_by_default(mocker):
+    """With persist=False (default), save_config should not be called."""
+    client = MagicMock()
+    client.is_authenticated.return_value = True
+    mocker.patch("credential_bridge.backends.vault.hvac.Client", return_value=client)
+    mocker.patch("credential_bridge.backends.vault.load_config", return_value={})
+    mock_save = mocker.patch("credential_bridge.backends.vault.save_config")
+
+    VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
+    mock_save.assert_not_called()
+
+
+def test_credentials_persisted_when_persist_true(mocker):
+    """With persist=True, save_config should be called once."""
+    client = MagicMock()
+    client.is_authenticated.return_value = True
+    mocker.patch("credential_bridge.backends.vault.hvac.Client", return_value=client)
+    mocker.patch("credential_bridge.backends.vault.load_config", return_value={})
+    mock_save = mocker.patch("credential_bridge.backends.vault.save_config")
+
+    VaultBackend(vault_url="https://vault.example.com", vault_token="s.test", persist=True)
+    mock_save.assert_called_once()

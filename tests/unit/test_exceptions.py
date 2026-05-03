@@ -37,3 +37,7 @@ def test_vault_connection_error_is_vault_error():
 
 def test_env_file_error_is_backend_error():
     assert issubclass(EnvFileError, BackendError)
+
+def test_env_file_key_exists_error_is_env_file_error():
+    from credential_bridge.exceptions import EnvFileKeyExistsError, EnvFileError
+    assert issubclass(EnvFileKeyExistsError, EnvFileError)
