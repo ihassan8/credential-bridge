@@ -1,0 +1,7 @@
+# Documentation build dependencies
+# Install: pip install -r requirements-docs.txt
+# Serve:   zensical serve
+# Build:   zensical build
+zensical>=0.0.39
+mkdocstrings[python]>=0.24
+mkdocs-autorefs>=1.0

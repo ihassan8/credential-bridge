@@ -1,17 +1,8 @@
 /* docs/css/extra.css */
 
-/* ── Brand colour tokens ──────────────────────────────── */
-[data-md-color-scheme="slate"] {
-  --cb-primary:   #7c3aed;
-  --cb-accent:    #a78bfa;
-  --cb-surface:   #1e1b2e;
-  --cb-border:    #3730a3;
-  --cb-success:   #22c55e;
-  --cb-warning:   #f59e0b;
-  --cb-danger:    #ef4444;
-}
-
-[data-md-color-scheme="default"] {
+/* ── Brand colour tokens ──────────────────────────────────────────────────── */
+/* Light mode defaults */
+:root {
   --cb-primary:   #6d28d9;
   --cb-accent:    #7c3aed;
   --cb-surface:   #f5f3ff;
@@ -21,7 +12,22 @@
   --cb-danger:    #dc2626;
 }
 
-/* ── Hero section ─────────────────────────────────────── */
+/* Dark mode — covers Zensical, Material for MkDocs, and system preference */
+[data-scheme="slate"],
+[data-md-color-scheme="slate"],
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cb-primary:   #7c3aed;
+    --cb-accent:    #a78bfa;
+    --cb-surface:   #1e1b2e;
+    --cb-border:    #3730a3;
+    --cb-success:   #22c55e;
+    --cb-warning:   #f59e0b;
+    --cb-danger:    #ef4444;
+  }
+}
+
+/* ── Hero section ─────────────────────────────────────────────────────────── */
 .cb-hero {
   padding: 4rem 2rem;
   text-align: center;
@@ -48,7 +54,7 @@
 .cb-btn-primary { background: #fff; color: var(--cb-primary); }
 .cb-btn-outline { border: 2px solid rgba(255,255,255,.7); color: #fff; }
 
-/* ── Backend comparison cards ────────────────────────── */
+/* ── Backend comparison cards ─────────────────────────────────────────────── */
 .cb-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -67,7 +73,7 @@
 .cb-card h3   { margin: 0 0 .5rem; font-size: 1rem; color: var(--cb-accent); }
 .cb-card p    { margin: 0; font-size: .875rem; opacity: .8; }
 
-/* ── Custom admonitions ──────────────────────────────── */
+/* ── Custom admonitions (pymdownx-generated HTML) ─────────────────────────── */
 .md-typeset .admonition.backend,
 .md-typeset details.backend {
   border-color: var(--cb-accent);
@@ -88,7 +94,7 @@
   background-color: rgba(34, 197, 94, 0.15);
 }
 
-/* ── Terminal demo block ─────────────────────────────── */
+/* ── Terminal demo block ──────────────────────────────────────────────────── */
 .cb-terminal {
   background: #0d0d0d;
   border-radius: .75rem;
@@ -100,8 +106,8 @@
   line-height: 1.6;
   min-height: 4rem;
 }
-.cb-terminal .prompt { color: var(--cb-accent); }
-.cb-terminal .output { color: #94a3b8; }
+.cb-terminal .prompt  { color: var(--cb-accent); }
+.cb-terminal .output  { color: #94a3b8; }
 .cb-terminal .success { color: var(--cb-success); }
 .cb-terminal .cursor {
   display: inline-block;
@@ -112,8 +118,3 @@
   vertical-align: text-bottom;
 }
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-
-/* ── Nav active state ────────────────────────────────── */
-.md-nav__item--active > .md-nav__link {
-  color: var(--cb-accent);
-}
