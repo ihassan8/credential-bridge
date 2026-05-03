@@ -12,7 +12,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 keywords = ["vault", "hashicorp", "keyring", "credentials", "authentication", "secrets", "dotenv", "env-file", "secrets-management"]
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE.txt"]
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -31,7 +31,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-dynamic = ["version", "dependencies"]
+dynamic = ["version", "dependencies", "optional-dependencies"]
 
 [project.urls]
 Homepage = "https://www.vertexaiautomations.com"
@@ -45,15 +45,13 @@ vault-cli   = "credential_bridge.cli.vault_cli:main"
 keyring-cli = "credential_bridge.cli.keyring_cli:main"
 run-wizard  = "credential_bridge.prompt_wizard:main"
 
-[project.optional-dependencies]
-dev = ["pytest>=7.0", "pytest-mock>=3.0"]
-fastapi = ["fastapi>=0.100", "starlette>=0.27.0"]
-
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
+optional-dependencies.dev = {file = ["requirements-dev.txt"]}
+optional-dependencies.fastapi = {file = ["requirements-fastapi.txt"]}
 
 [tool.setuptools_scm]
 version_file = "src/credential_bridge/_version.py"
