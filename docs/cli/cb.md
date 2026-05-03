@@ -1,46 +1,66 @@
-# Unified CLI (cb)
+# Unified CLI — cb
 
-The `cb` command provides a single entry point for all backend operations.
+`cb` is the single entry point for all credential-bridge operations.
 
-## Installation
-
-After `pip install credential-bridge`, the `cb` command is available:
+## Install & invoke
 
 ```bash
+# Standard
 cb --help
+
+# python -m fallback (when executables are blocked)
+python -m credential_bridge --help
 ```
 
-## Command structure
+## Commands
 
-```
-cb vault   add|get|update|delete|list  [options]
-cb keyring add|get|update|delete       [options]
-cb env     add|get|update|delete|list  [options]
-cb wizard
-```
+| Command | Description |
+|---|---|
+| `cb vault` | HashiCorp Vault operations |
+| `cb keyring` | System keyring operations |
+| `cb env` | .env file operations |
+| `cb wizard` | Interactive wizard |
 
-## Quick examples
+## Global flags
+
+| Flag | Description |
+|---|---|
+| `--version`, `-V` | Print version and exit |
+| `--help` | Show help |
+| `--install-completion` | Install shell tab-completion |
+
+## Version
 
 ```bash
-# Vault — add a secret
-cb vault add myapp/db --secret user=admin --secret pass=s3cr3t \
-  --vault-url https://vault.example.com --vault-token s.xxx
-
-# Keyring — get a secret
-cb keyring get github_token --service-name dev
-
-# .env — list all keys
-cb env list
-
-# Launch interactive wizard
-cb wizard
+cb --version
+# cb version 1.2.3
 ```
 
-## Environment variables
+## Shell tab-completion
 
-| Variable | Used by | Description |
-|---|---|---|
-| `VAULT_ADDR` | vault subcommand | Vault server URL |
-| `VAULT_TOKEN` | vault subcommand | Vault authentication token |
-| `VAULT_ROLE_ID` | vault subcommand | AppRole role ID |
-| `VAULT_SECRET_ID` | vault subcommand | AppRole secret ID |
+```bash
+cb --install-completion   # installs for current shell
+cb --show-completion      # prints the completion script
+```
+
+## Interactive mode fallback
+
+When `--secret` is omitted from `add` or `update` commands, the CLI prompts for secrets interactively with masked input:
+
+```
+$ cb env add DB_URL
+Enter secrets interactively. Leave KEY blank to finish.
+  Key   : DB_URL
+  Value : ········
+  Key   :
+✓  Secret DB_URL added to .env.
+```
+
+## Machine-readable output
+
+All `get` and `list` commands support `--output json` for scripting:
+
+```bash
+cb vault get myapp/db --output json | jq '.user'
+cb env list --output json | python3 -c "import sys,json; print(json.load(sys.stdin))"
+```
