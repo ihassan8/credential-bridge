@@ -62,7 +62,11 @@ def _print_banner() -> None:
     except Exception:
         ascii_art = "Credential Bridge"
 
-    art = Text(ascii_art, style="bold #7c3aed", justify="center")
+    # Render banner on a wide console so the ASCII art never wraps
+    from rich.console import Console as _Console
+    wide = _Console(width=120)
+
+    art = Text(ascii_art, style="bold #7c3aed", no_wrap=True, justify="center")
     tagline = Text(
         "\nUnified secrets management  ·  Vault  ·  Keyring  ·  .env",
         style="dim #a78bfa",
@@ -70,14 +74,14 @@ def _print_banner() -> None:
     )
     combined = Text.assemble(art, tagline)
 
-    console.print(
+    wide.print(
         Panel(
             Align.center(combined),
             border_style="#3730a3",
-            padding=(1, 6),
+            padding=(1, 4),
         )
     )
-    console.print()
+    wide.print()
 
 
 def _print_result_dict(data: dict, title: str = "") -> None:
