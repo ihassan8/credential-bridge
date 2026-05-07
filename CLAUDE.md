@@ -12,8 +12,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install with dev dependencies
 pip install -e ".[dev]"
 
-# Run tests
+# Run all unit tests
 pytest tests/unit/
+
+# Run a single test file or specific test
+pytest tests/unit/test_manager.py
+pytest tests/unit/test_vault_backend.py::TestVaultBackend::test_add_secret
 
 # Run integration tests (requires external services)
 pytest tests/integration/ -m integration
@@ -44,6 +48,7 @@ src/credential_bridge/
 │   └── env_file.py      # EnvFileBackend: .env file CRUD with atomic writes
 ├── cli/
 │   ├── main.py          # Unified `cb` entry point (Typer, composes sub-apps)
+│   ├── _output.py       # Shared Rich helpers: print_success/error/result/table
 │   ├── vault_cli.py     # vault-cli (Typer + Rich)
 │   ├── keyring_cli.py   # keyring-cli (Typer + Rich)
 │   └── env_cli.py       # env-cli (Typer + Rich)
@@ -62,6 +67,12 @@ src/credential_bridge/
 - `EnvFileBackend` uses `os.replace()` for atomic writes (write to `.env.tmp`, rename). Values with spaces or special chars are double-quoted.
 - All logging goes through `PyLogShield` for sensitive data masking. Both `VaultBackend` and `KeyringBackend` accept an optional `logger: PyLogShield` parameter.
 - TLS verification is enabled by default (`verify=True`). Pass `cert="/path/to/ca.pem"` for custom CA bundles.
+- `get_session()` sets `trust_env = False` — the requests session does NOT pick up system proxy env vars unless `proxies` is explicitly passed.
+- `KeyringBackend.list_secrets()` always raises `KeyringError`; Windows Credential Manager and macOS Keychain don't expose enumeration APIs.
+- `EnvFileBackend.add_secret(name, {...})` writes a `# name` comment block above the key-value pairs. `get_secret(name)` resolves either a single key or all keys under a matching comment block.
+- `EnvFileBackend(load_into_environ=True)` syncs written/updated values into `os.environ` immediately.
+- `VaultBackend` exposes version-management helpers beyond the abstract interface: `delete_secret_versions`, `undelete_secret_versions`, `destroy_secret_versions`, and `read_secret_metadata`.
+- On Windows, `save_config()` cannot set file permissions to 0o600 and issues a `UserWarning` instead; `cli/_output.py` reconfigures stdout/stderr to UTF-8 to handle Rich's box-drawing characters.
 
 ## Exception Hierarchy
 
