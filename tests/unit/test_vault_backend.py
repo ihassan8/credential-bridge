@@ -23,6 +23,7 @@ def test_raises_configuration_error_without_vault_url(mocker):
     mocker.patch("credential_bridge.backends.vault.os.environ.get", return_value=None)
     mocker.patch("credential_bridge.backends.vault.load_config", return_value={})
     mocker.patch("credential_bridge.backends.vault.save_config")
+    # ConfigurationError must fire before getpass.getuser() or session setup
     with pytest.raises(ConfigurationError, match="VAULT_ADDR"):
         VaultBackend(vault_token="s.test")
 
@@ -93,15 +94,17 @@ def test_backend_name():
 
 
 def test_mount_point_default(mock_hvac):
+    import getpass
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
-    assert backend.mount_point == "secret"
+    assert backend.mount_point == getpass.getuser()
 
 
 def test_list_secrets_empty_path(mock_hvac):
+    import getpass
     mock_hvac.secrets.kv.v2.list_secrets.return_value = {"data": {"keys": ["a", "b"]}}
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
     result = backend.list_secrets()
-    mock_hvac.secrets.kv.v2.list_secrets.assert_called_once_with(path="", mount_point="secret")
+    mock_hvac.secrets.kv.v2.list_secrets.assert_called_once_with(path="", mount_point=getpass.getuser())
 
 
 # ---------------------------------------------------------------------------
@@ -152,12 +155,13 @@ def test_approle_auth_error_on_bad_credentials(mocker):
 # ---------------------------------------------------------------------------
 
 def test_update_secret(mock_hvac):
+    import getpass
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
     backend.update_secret("myapp/db", {"pass": "newpass"})
     mock_hvac.secrets.kv.v2.patch.assert_called_once_with(
         path="myapp/db",
         secret={"pass": "newpass"},
-        mount_point="secret",
+        mount_point=getpass.getuser(),
     )
 
 

@@ -356,6 +356,10 @@ def _vault_action_loop(auth_label: str, vault_token=None, vault_role_id=None, va
     ]
     action_completer = WordCompleter(_VAULT_ACTIONS, ignore_case=True)
 
+    service_name = _prompt(
+        "<b><ansibrightgreen>  Service name (tag):</ansibrightgreen></b>    "
+    )
+
     while True:
         _section(f"Vault  ·  {auth_label.replace('_', ' ').title()}")
         action = _menu_prompt(
@@ -370,9 +374,6 @@ def _vault_action_loop(auth_label: str, vault_token=None, vault_role_id=None, va
             _error(f"Unknown action '{action}'.")
             continue
 
-        service_name = _prompt(
-            "<b><ansibrightgreen>  Service name (tag):</ansibrightgreen></b>    "
-        )
         secret_path = _prompt(
             "<b><ansibrightgreen>  Secret path (e.g. myapp/db):</ansibrightgreen></b>  "
         )
@@ -461,7 +462,11 @@ def configure_env() -> None:
                 name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen></b>   ")
                 value = _prompt("<b><ansibrightgreen>  Value:</ansibrightgreen></b>      ")
                 if action == "add":
-                    backend.add_secret(name, {name: value})
+                    label = _prompt(
+                        "<b><ansibrightgreen>  Group label</ansibrightgreen></b>"
+                        "  <ansiwhite>(leave blank to use key name):</ansiwhite>  "
+                    ) or name
+                    backend.add_secret(label, {name: value})
                 else:
                     backend.update_secret(name, {name: value})
                 _success(f"{action.capitalize()} successful: [bold]{name}[/bold]")

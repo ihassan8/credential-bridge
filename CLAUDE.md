@@ -48,7 +48,7 @@ src/credential_bridge/
 │   └── env_file.py      # EnvFileBackend: .env file CRUD with atomic writes
 ├── cli/
 │   ├── main.py          # Unified `cb` entry point (Typer, composes sub-apps)
-│   ├── _output.py       # Shared Rich helpers: print_success/error/result/table
+│   ├── _output.py       # Shared Rich + CLI helpers: print_success/error/result/table, parse_secrets, prompt_secrets_interactive
 │   ├── vault_cli.py     # vault-cli (Typer + Rich)
 │   ├── keyring_cli.py   # keyring-cli (Typer + Rich)
 │   └── env_cli.py       # env-cli (Typer + Rich)
@@ -62,9 +62,12 @@ src/credential_bridge/
 - `BaseSecretBackend` enforces `backend_name` via `__init_subclass__` — forgetting to set it raises `TypeError` at class definition time.
 - `SecretsManager._registry` is a class-level dict. `register_backend("name", MyBackend)` is how third-party backends plug in. Tests must use a `clean_registry` autouse fixture to isolate state.
 - `VaultBackend` URL resolution: `vault_url` arg → `VAULT_ADDR` env var → `~/.vault_config.json` → `ConfigurationError`.
+- `VaultBackend.__init__` resolves and validates `vault_url`/`VAULT_ADDR`/config **first**, before any other setup (fail-fast). `mount_point` defaults to `getpass.getuser()` via the cross-platform `_safe_getuser()` helper (catches `ModuleNotFoundError` from the missing `pwd` module on Windows).
 - `VaultBackend(persist=False)` is the default — credentials are NOT written to `~/.vault_config.json` unless `persist=True` is explicitly passed.
 - `KeyringBackend` serialises the secret dict to JSON before storing (keyring stores one string per key). `get_secret` deserialises on retrieval.
-- `EnvFileBackend` uses `os.replace()` for atomic writes (write to `.env.tmp`, rename). Values with spaces or special chars are double-quoted.
+- `EnvFileBackend` uses `os.replace()` for atomic writes (write to `.env.tmp`, rename). Values with spaces, tabs, newlines, or special chars (`#`, `"`, `'`, `\`, `$`, `` ` ``) are double-quoted.
+- `EnvFileBackend.delete_secret(name)` also removes the preceding `# group_name` comment header if no other key=value lines remain under it, keeping the file clean.
+- `EnvFileBackend.update_secret` raises `EnvFileNotFoundError` (not the base `EnvFileError`) when keys are missing, consistent with `delete_secret`.
 - All logging goes through `PyLogShield` for sensitive data masking. Both `VaultBackend` and `KeyringBackend` accept an optional `logger: PyLogShield` parameter.
 - TLS verification is enabled by default (`verify=True`). Pass `cert="/path/to/ca.pem"` for custom CA bundles.
 - `get_session()` sets `trust_env = False` — the requests session does NOT pick up system proxy env vars unless `proxies` is explicitly passed.

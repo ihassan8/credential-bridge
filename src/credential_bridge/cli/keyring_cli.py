@@ -2,41 +2,14 @@
 from typing import List, Optional
 
 import typer
-from prompt_toolkit import prompt as pt_prompt
-from prompt_toolkit.styles import Style as PtStyle
 
 from ..backends.keyring import KeyringBackend
 from ..exceptions import CredentialBridgeError
-from ._output import print_error, print_result, print_success
+from ._output import parse_secrets, prompt_secrets_interactive, print_error, print_result, print_success
 
 app = typer.Typer(name="keyring", help="System keyring secret operations", no_args_is_help=True)
 
-_pt_style = PtStyle.from_dict({"prompt": "fg:ansibrightgreen bold"})
 _SERVICE = typer.Option("default", "--service-name", "-s", help="Keyring service name (default: 'default')")
-
-
-def _parse_secrets(pairs: List[str]) -> dict:
-    result = {}
-    for s in pairs:
-        if "=" not in s:
-            print_error(f"Invalid secret format '{s}' — expected KEY=value.", title="Bad Input")
-            raise typer.Exit(1)
-        k, v = s.split("=", 1)
-        result[k] = v
-    return result
-
-
-def _prompt_secrets_interactive() -> List[str]:
-    secrets = []
-    from ._output import console
-    console.print("[dim]Enter secrets interactively. Leave KEY blank to finish.[/dim]")
-    while True:
-        key = pt_prompt("  Key   : ", style=_pt_style).strip()
-        if not key:
-            break
-        value = pt_prompt("  Value : ", style=_pt_style, is_password=True).strip()
-        secrets.append(f"{key}={value}")
-    return secrets
 
 
 @app.command()
@@ -47,12 +20,12 @@ def add(
 ):
     """Add a secret to the system keyring."""
     if not secret:
-        secret = _prompt_secrets_interactive()
+        secret = prompt_secrets_interactive()
     if not secret:
         print_error("At least one KEY=value pair is required.", title="Missing Input")
         raise typer.Exit(1)
     backend = KeyringBackend(service_name=service_name)
-    secret_dict = _parse_secrets(secret)
+    secret_dict = parse_secrets(secret)
     try:
         backend.add_secret(name, secret_dict)
         print_success(f"Secret [bold]{name}[/bold] added.")
@@ -89,12 +62,12 @@ def update(
 ):
     """Update an existing keyring secret."""
     if not secret:
-        secret = _prompt_secrets_interactive()
+        secret = prompt_secrets_interactive()
     if not secret:
         print_error("At least one KEY=value pair is required.", title="Missing Input")
         raise typer.Exit(1)
     backend = KeyringBackend(service_name=service_name)
-    secret_dict = _parse_secrets(secret)
+    secret_dict = parse_secrets(secret)
     try:
         backend.update_secret(name, secret_dict)
         print_success(f"Secret [bold]{name}[/bold] updated.")

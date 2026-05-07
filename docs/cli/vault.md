@@ -21,7 +21,7 @@ These apply to every subcommand. Set them as env vars to avoid repeating them:
 | `--vault-role-id ID` | `VAULT_ROLE_ID` | — | AppRole role ID |
 | `--vault-secret-id ID` | `VAULT_SECRET_ID` | — | AppRole secret ID |
 | `--service-name NAME` | — | `default_service` | Logging tag |
-| `--mount-point MP` | — | `secret` | KV-v2 mount point |
+| `--mount-point MP` | — | current OS username | KV-v2 mount point |
 
 Setting env vars once:
 
@@ -54,7 +54,7 @@ cb vault add NAME [--secret KEY=VALUE]... [AUTH OPTIONS]
 | `--vault-role-id ID` | — | See auth options | AppRole role ID |
 | `--vault-secret-id ID` | — | See auth options | AppRole secret ID |
 | `--service-name NAME` | — | No | Logging tag (default: `default_service`) |
-| `--mount-point MP` | — | No | KV-v2 mount point (default: `secret`) |
+| `--mount-point MP` | — | No | KV-v2 mount point (default: current OS username) |
 
 ### Examples
 
@@ -128,7 +128,7 @@ cb vault get NAME [--output FORMAT] [AUTH OPTIONS]
 | `--vault-role-id ID` | — | `$VAULT_ROLE_ID` | AppRole role ID |
 | `--vault-secret-id ID` | — | `$VAULT_SECRET_ID` | AppRole secret ID |
 | `--service-name NAME` | — | `default_service` | Logging tag |
-| `--mount-point MP` | — | `secret` | KV-v2 mount point |
+| `--mount-point MP` | — | current OS username | KV-v2 mount point |
 
 ### Examples
 
@@ -175,7 +175,7 @@ cb vault update NAME [--secret KEY=VALUE]... [AUTH OPTIONS]
 | `--vault-role-id ID` | — | See auth options | AppRole role ID |
 | `--vault-secret-id ID` | — | See auth options | AppRole secret ID |
 | `--service-name NAME` | — | No | Logging tag (default: `default_service`) |
-| `--mount-point MP` | — | No | KV-v2 mount point (default: `secret`) |
+| `--mount-point MP` | — | No | KV-v2 mount point (default: current OS username) |
 
 ### Examples
 
@@ -223,7 +223,7 @@ cb vault delete NAME [--yes] [AUTH OPTIONS]
 | `--vault-role-id ID` | — | `$VAULT_ROLE_ID` | AppRole role ID |
 | `--vault-secret-id ID` | — | `$VAULT_SECRET_ID` | AppRole secret ID |
 | `--service-name NAME` | — | `default_service` | Logging tag |
-| `--mount-point MP` | — | `secret` | KV-v2 mount point |
+| `--mount-point MP` | — | current OS username | KV-v2 mount point |
 
 ### Examples
 
@@ -267,7 +267,7 @@ cb vault list [PATH] [AUTH OPTIONS]
 | `--vault-role-id ID` | — | `$VAULT_ROLE_ID` | AppRole role ID |
 | `--vault-secret-id ID` | — | `$VAULT_SECRET_ID` | AppRole secret ID |
 | `--service-name NAME` | — | `default_service` | Logging tag |
-| `--mount-point MP` | — | `secret` | KV-v2 mount point |
+| `--mount-point MP` | — | current OS username | KV-v2 mount point |
 
 ### Examples
 

@@ -69,7 +69,7 @@ also read automatically if the corresponding constructor arguments are omitted.
 | `vault_role_id` | `str \| None` | `None` | AppRole role ID. Requires `vault_secret_id`. |
 | `vault_secret_id` | `str \| None` | `None` | AppRole secret ID. Requires `vault_role_id`. |
 | `service_name` | `str` | `"default_service"` | Logging tag only — not used in Vault API calls. |
-| `mount_point` | `str` | `"secret"` | KV-v2 mount point (standard Vault convention). |
+| `mount_point` | `str \| None` | current OS username | KV-v2 mount point. Defaults to the current OS username (`getpass.getuser()`). Pass an explicit string to override. |
 | `proxies` | `dict \| None` | `None` | HTTP proxy settings passed to the `requests` session. |
 | `cert` | `str \| None` | `None` | Path to a custom CA certificate. `None` uses the system CA bundle. |
 | `log_level` | `LogLevel \| str` | `LogLevel.WARNING` | Minimum log level for the internal logger. |
@@ -271,8 +271,7 @@ cfg = backend.get_config()
 Before every operation `VaultBackend` calls `_refresh_token_if_needed()`, which
 looks up the current token's TTL. If the TTL is below **5 minutes** (300 seconds)
 the token is automatically renewed in place, so long-running processes don't need
-to handle token expiry manually. If the renewal fails (e.g. the token is
-non-renewable) a `VaultAuthError` is raised.
+to handle token expiry manually. If the renewal fails because the token is non-renewable, a `VaultAuthError` is raised. If Vault is unreachable during the refresh check (network error, timeout, server down), a `VaultConnectionError` is raised immediately — the error is not silently swallowed.
 
 ## Error handling
 
@@ -303,7 +302,7 @@ except ConfigurationError as e:
 
 | Exception | Cause | Resolution |
 |---|---|---|
-| `ConfigurationError` | No Vault URL found, both Token and AppRole provided, or invalid logger type | Set `VAULT_ADDR` / pass `vault_url=`; choose one auth method |
+| `ConfigurationError` | No Vault URL found (checked first, before any other setup), both Token and AppRole provided, or invalid logger type | Set `VAULT_ADDR` / pass `vault_url=`; choose one auth method |
 | `VaultAuthError` | Token invalid or expired; AppRole credentials rejected; Forbidden response | Obtain a fresh token or verify AppRole credentials |
 | `VaultConnectionError` | Server unreachable — bad URL, network issue, or Vault sealed | Check `VAULT_ADDR`, network connectivity, and Vault status |
 | `VaultSecretNotFoundError` | Path does not exist in KV-v2 (`InvalidPath` from hvac) | Verify the path with `list_secrets()` |
