@@ -4,6 +4,9 @@ import json
 import sys
 from typing import Any, Dict, List
 
+import typer
+from prompt_toolkit import prompt as pt_prompt
+from prompt_toolkit.styles import Style as PtStyle
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -58,3 +61,29 @@ def print_table(rows: List[str], title: str = "", column: str = "Key") -> None:
     for row in rows:
         table.add_row(row)
     console.print(table)
+
+
+def parse_secrets(pairs: List[str]) -> dict:
+    """Convert KEY=value strings to a dict, raising a clean error on malformed input."""
+    result = {}
+    for s in pairs:
+        if "=" not in s:
+            print_error(f"Invalid secret format '{s}' — expected KEY=value.", title="Bad Input")
+            raise typer.Exit(1)
+        k, v = s.split("=", 1)
+        result[k] = v
+    return result
+
+
+def prompt_secrets_interactive(mask_value: bool = True) -> List[str]:
+    """Interactively prompt for KEY=value pairs; returns list of 'KEY=value' strings."""
+    _pt_style = PtStyle.from_dict({"prompt": "fg:ansibrightgreen bold"})
+    secrets = []
+    console.print("[dim]Enter secrets interactively. Leave KEY blank to finish.[/dim]")
+    while True:
+        key = pt_prompt("  Key   : ", style=_pt_style).strip()
+        if not key:
+            break
+        value = pt_prompt("  Value : ", style=_pt_style, is_password=mask_value).strip()
+        secrets.append(f"{key}={value}")
+    return secrets

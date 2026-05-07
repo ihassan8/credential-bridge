@@ -56,11 +56,12 @@ The token is validated against Vault before being saved. Saved credentials are l
 
 ### Operations
 
-After authentication, the action menu appears:
+When you enter the Vault session you are asked for a **service name** (a logging tag) once. After that you choose an action and supply a secret path for each operation:
 
 ```
+  Service name (tag):  myapp
+
 [Vault › vault_token]  (add/get/update/delete/list/… /back):  add
-  Service name (tag):              myapp
   Secret path (e.g. myapp/db):    myapp/database
   Number of key-value pairs:      2
   Key 1:    user
@@ -115,6 +116,8 @@ Get results are shown as syntax-highlighted JSON:
 ```
 
 The `.env` path is asked once per session — you don't need to re-enter it for each operation.
+
+When adding a key, you are also prompted for an optional **group label** (a `# label` comment written above the key in the file). Leave it blank to use the key name as the label, or enter a custom label to group multiple related keys under a meaningful heading.
 
 ## Exiting
 

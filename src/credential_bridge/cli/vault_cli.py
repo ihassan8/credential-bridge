@@ -2,16 +2,16 @@
 from typing import List, Optional
 
 import typer
-from prompt_toolkit import prompt as pt_prompt
-from prompt_toolkit.styles import Style as PtStyle
 
 from ..backends.vault import VaultBackend
 from ..exceptions import CredentialBridgeError, VaultSecretNotFoundError
-from ._output import console, err_console, print_error, print_result, print_success, print_table
+from ._output import (
+    console, err_console,
+    parse_secrets, prompt_secrets_interactive,
+    print_error, print_result, print_success, print_table,
+)
 
 app = typer.Typer(name="vault", help="HashiCorp Vault secret operations", no_args_is_help=True)
-
-_pt_style = PtStyle.from_dict({"prompt": "fg:ansibrightgreen bold"})
 
 # Shared auth option defaults
 _VAULT_URL    = typer.Option(None,              "--vault-url",       envvar="VAULT_ADDR",      help="Vault server URL (or set VAULT_ADDR)")
@@ -19,7 +19,7 @@ _VAULT_TOKEN  = typer.Option(None,              "--vault-token",     envvar="VAU
 _ROLE_ID      = typer.Option(None,              "--vault-role-id",   envvar="VAULT_ROLE_ID",   help="AppRole role ID")
 _SECRET_ID    = typer.Option(None,              "--vault-secret-id", envvar="VAULT_SECRET_ID", help="AppRole secret ID")
 _SERVICE_NAME = typer.Option("default_service", "--service-name",                              help="Service name (logging tag)")
-_MOUNT_POINT  = typer.Option("secret",          "--mount-point",                               help="Vault KV-v2 mount point")
+_MOUNT_POINT  = typer.Option(None,              "--mount-point",                               help="Vault KV-v2 mount point (default: current OS username)")
 
 
 def _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point):
@@ -37,31 +37,6 @@ def _make_backend(vault_url, vault_token, role_id, secret_id, service_name, moun
         raise typer.Exit(1)
 
 
-def _parse_secrets(pairs: List[str]) -> dict:
-    """Convert KEY=value strings to a dict, raising a clean error on malformed input."""
-    result = {}
-    for s in pairs:
-        if "=" not in s:
-            print_error(f"Invalid secret format '{s}' — expected KEY=value.", title="Bad Input")
-            raise typer.Exit(1)
-        k, v = s.split("=", 1)
-        result[k] = v
-    return result
-
-
-def _prompt_secrets_interactive() -> List[str]:
-    """Interactively prompt for KEY=value pairs when --secret is omitted."""
-    secrets = []
-    console.print("[dim]Enter secrets interactively. Leave KEY blank to finish.[/dim]")
-    while True:
-        key = pt_prompt("  Key   : ", style=_pt_style).strip()
-        if not key:
-            break
-        value = pt_prompt("  Value : ", style=_pt_style, is_password=True).strip()
-        secrets.append(f"{key}={value}")
-    return secrets
-
-
 @app.command()
 def add(
     name: str = typer.Argument(..., help="Secret path (e.g. myapp/database)"),
@@ -75,12 +50,12 @@ def add(
 ):
     """Add a secret to Vault."""
     if not secret:
-        secret = _prompt_secrets_interactive()
+        secret = prompt_secrets_interactive()
     if not secret:
         print_error("At least one KEY=value pair is required.", title="Missing Input")
         raise typer.Exit(1)
     backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
-    secret_dict = _parse_secrets(secret)
+    secret_dict = parse_secrets(secret)
     try:
         backend.add_secret(name, secret_dict)
         print_success(f"Secret [bold]{name}[/bold] added.")
@@ -130,12 +105,12 @@ def update(
 ):
     """Update an existing Vault secret."""
     if not secret:
-        secret = _prompt_secrets_interactive()
+        secret = prompt_secrets_interactive()
     if not secret:
         print_error("At least one KEY=value pair is required.", title="Missing Input")
         raise typer.Exit(1)
     backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
-    secret_dict = _parse_secrets(secret)
+    secret_dict = parse_secrets(secret)
     try:
         backend.update_secret(name, secret_dict)
         print_success(f"Secret [bold]{name}[/bold] updated.")

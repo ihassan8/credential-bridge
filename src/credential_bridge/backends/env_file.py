@@ -20,7 +20,7 @@ def _quote_value(value: str) -> str:
                     return value
                 break
     # Needs quoting if contains spaces or special chars
-    if any(c in value for c in (' ', '\t', '#', '"', "'", '\\', '$', '`')):
+    if any(c in value for c in (' ', '\t', '\n', '\r', '#', '"', "'", '\\', '$', '`')):
         escaped = value.replace('\\', '\\\\').replace('"', '\\"')
         return f'"{escaped}"'
     return value
@@ -108,7 +108,7 @@ class EnvFileBackend(BaseSecretBackend):
         existing = self._current_keys()
         missing = [k for k in secret if k not in existing]
         if missing:
-            raise EnvFileError(
+            raise EnvFileNotFoundError(
                 f"Key(s) {missing} not found in {self.path}. Use add_secret() first."
             )
         lines = self._read_lines()
@@ -131,10 +131,45 @@ class EnvFileBackend(BaseSecretBackend):
         if name not in existing:
             raise EnvFileNotFoundError(f"Key '{name}' not found in {self.path}.")
         lines = self._read_lines()
-        new_lines = [
-            line for line in lines
-            if not ("=" in line and not line.strip().startswith("#") and line.split("=", 1)[0].strip() == name)
-        ]
+
+        # Find the index of the key line to remove
+        key_idx = next(
+            (i for i, line in enumerate(lines)
+             if "=" in line
+             and not line.strip().startswith("#")
+             and line.split("=", 1)[0].strip() == name),
+            None,
+        )
+
+        to_remove: set = set()
+        if key_idx is not None:
+            to_remove.add(key_idx)
+
+            # Walk backwards (skipping blank lines) to find a preceding group-header comment
+            comment_idx = None
+            for i in range(key_idx - 1, -1, -1):
+                s = lines[i].strip()
+                if not s:
+                    continue
+                if s.startswith("#"):
+                    comment_idx = i
+                break
+
+            if comment_idx is not None:
+                # Remove the comment header only if no other key=value lines follow it
+                # (scan forward until the next comment line or EOF, excluding the key being deleted)
+                has_sibling_keys = False
+                for i in range(comment_idx + 1, len(lines)):
+                    s = lines[i].strip()
+                    if s.startswith("#"):
+                        break
+                    if "=" in s and not s.startswith("#") and i != key_idx:
+                        has_sibling_keys = True
+                        break
+                if not has_sibling_keys:
+                    to_remove.add(comment_idx)
+
+        new_lines = [line for i, line in enumerate(lines) if i not in to_remove]
         self._write_lines(new_lines)
         if self.load_into_environ:
             os.environ.pop(name, None)

@@ -90,9 +90,9 @@ API_KEY=sk-abc123
 
 ### Value quoting
 
-Values that contain spaces, tabs, `#`, `"`, `'`, `\`, `$`, or `` ` `` are
-automatically wrapped in double quotes. You do not need to quote values
-yourself.
+Values that contain spaces, tabs, newlines (`\n`), carriage returns (`\r`),
+`#`, `"`, `'`, `\`, `$`, or `` ` `` are automatically wrapped in double quotes.
+You do not need to quote values yourself.
 
 ```python
 backend.add_secret("GREETING", {"GREETING": "hello world"})
@@ -153,9 +153,9 @@ cb env get API_KEY --path config/.env
 
 Performs a **partial update** — only the keys specified in `secret` are changed;
 all other lines in the file are preserved exactly as they are. Raises
-`EnvFileError` if **any** key in `secret` is missing from the file — use
+`EnvFileNotFoundError` if **any** key in `secret` is missing from the file — use
 `add_secret()` first. If the `.env` file does not exist, all specified keys are
-considered missing and `EnvFileError` is raised.
+considered missing and `EnvFileNotFoundError` is raised.
 
 ```python
 # Only DB_HOST is changed; DB_PORT and all other keys are untouched
@@ -170,9 +170,10 @@ cb env update DB_HOST --secret DB_HOST=prod-db.example.com
 
 ### delete_secret
 
-Removes the line for the specified key. The comment header for the group is
-**not** automatically removed. Raises `EnvFileNotFoundError` if the key does
-not exist.
+Removes the line for the specified key. If the deleted key was the last key
+under a `# group_name` comment header, that header is also removed
+automatically, keeping the file clean. Raises `EnvFileNotFoundError` if the key
+does not exist.
 
 ```python
 backend.delete_secret("API_KEY")
@@ -259,7 +260,7 @@ except EnvFileNotFoundError:
 
 try:
     backend.update_secret("MISSING_KEY", {"MISSING_KEY": "value"})
-except EnvFileError:
+except EnvFileNotFoundError:
     print("One or more keys not found — use add_secret() first")
 ```
 
@@ -269,7 +270,7 @@ except EnvFileError:
 |---|---|---|
 | `EnvFileKeyExistsError` | `add_secret()` called when one or more keys already exist | Use `update_secret()` to change existing keys |
 | `EnvFileNotFoundError` | `get_secret()` or `delete_secret()` called with a key not in the file | Check the key name with `list_secrets()` |
-| `EnvFileError` | `update_secret()` called when one or more specified keys are missing | Use `add_secret()` to create them first |
+| `EnvFileNotFoundError` | `update_secret()` called when one or more specified keys are missing | Use `add_secret()` to create them first |
 
 `EnvFileNotFoundError` and `EnvFileKeyExistsError` are both subclasses of
 `EnvFileError`, which is itself a subclass of `BackendError`.

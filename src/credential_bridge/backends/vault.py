@@ -1,5 +1,6 @@
 """HashiCorp Vault backend for credential-bridge."""
 
+import getpass
 import os
 from typing import Any, Dict, List, Optional, Union
 
@@ -18,6 +19,24 @@ from credential_bridge.exceptions import (
 from credential_bridge.utils import get_session, load_config, save_config
 
 
+def _safe_getuser() -> str:
+    """Return the current OS username, cross-platform safe.
+
+    getpass.getuser() falls back to the pwd module when no username env var is
+    set; pwd does not exist on Windows, so we catch any failure and try the
+    standard env vars manually before giving up.
+    """
+    try:
+        return getpass.getuser()
+    except Exception:
+        return (
+            os.environ.get("USERNAME")
+            or os.environ.get("USER")
+            or os.environ.get("LOGNAME")
+            or "default"
+        )
+
+
 class VaultBackend(BaseSecretBackend):
     """HashiCorp Vault KV-v2 secret backend."""
 
@@ -30,7 +49,7 @@ class VaultBackend(BaseSecretBackend):
         vault_role_id: Optional[str] = None,
         vault_secret_id: Optional[str] = None,
         service_name: str = "default_service",
-        mount_point: str = "secret",
+        mount_point: Optional[str] = None,
         proxies: Optional[Dict[str, str]] = None,
         cert: Optional[str] = None,
         log_level: Union[LogLevel, str] = LogLevel.WARNING,
@@ -38,9 +57,22 @@ class VaultBackend(BaseSecretBackend):
         mask: bool = True,
         persist: bool = False,   # opt-in credential persistence to ~/.vault_config.json
     ) -> None:
+        # --- Fail fast: resolve vault address before any other setup ---
+        config = load_config()
+        if vault_url:
+            self.vault_addr = vault_url
+        else:
+            self.vault_addr = os.environ.get("VAULT_ADDR") or config.get("vault_addr")
+
+        if not self.vault_addr:
+            raise ConfigurationError(
+                "Vault address must be provided via the vault_url argument, "
+                "the VAULT_ADDR environment variable, or ~/.vault_config.json"
+            )
+
         self.mask = mask
         self.service_name = service_name
-        self.mount_point = mount_point
+        self.mount_point = mount_point if mount_point is not None else _safe_getuser()
         self.cert = cert  # None means use system CA bundle; path string means custom cert
         self.proxies = proxies
 
@@ -52,20 +84,6 @@ class VaultBackend(BaseSecretBackend):
         self.logger = logger or get_logger(name="credential_bridge", log_level=log_level, force=True)
 
         self.session = get_session(cert, proxies)
-
-        config = load_config()
-
-        # --- Resolve vault address ---
-        if vault_url:
-            self.vault_addr = vault_url
-        else:
-            self.vault_addr = os.environ.get("VAULT_ADDR") or config.get("vault_addr")
-
-        if not self.vault_addr:
-            raise ConfigurationError(
-                "Vault address must be provided via the vault_url argument, "
-                "the VAULT_ADDR environment variable, or ~/.vault_config.json"
-            )
 
         # --- Resolve credentials (args override config) ---
         self.vault_token = vault_token or config.get("vault_token")
@@ -102,6 +120,13 @@ class VaultBackend(BaseSecretBackend):
             save_config(config)
 
         self.client = self._authenticate()
+
+    def __repr__(self) -> str:
+        auth = "token" if self.vault_token else "approle"
+        return (
+            f"VaultBackend(vault_addr={self.vault_addr!r}, "
+            f"auth={auth!r}, mount_point={self.mount_point!r})"
+        )
 
     # ------------------------------------------------------------------
     # Authentication
@@ -172,8 +197,13 @@ class VaultBackend(BaseSecretBackend):
                 self.client = self._authenticate()
             else:
                 raise VaultAuthError(f"Vault token is invalid or has expired: {e}") from e
+        except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout,
+                ConnectionError, OSError) as e:
+            raise VaultConnectionError(
+                f"Cannot reach Vault at {self.vault_addr}: {e}"
+            ) from e
         except Exception as e:
-            self.logger.warning(f"Token refresh check failed (will retry on next operation): {e}")
+            self.logger.warning("Token refresh check failed (will retry on next operation): %s", e)
 
     # ------------------------------------------------------------------
     # BaseSecretBackend interface
