@@ -83,7 +83,7 @@ cb keyring add github_token --secret github_token=ghp_xxx --service-name myapp
 
 ### get_secret
 
-Returns the secret dict. Raises `KeyringError` if the key does not exist.
+Returns the secret dict. Raises `KeyringSecretNotFoundError` if the key does not exist.
 
 ```python
 secret = backend.get_secret("github_token")
@@ -99,7 +99,7 @@ cb keyring get github_token --service-name myapp
 
 ### update_secret
 
-Replaces the stored value for an existing key. Raises `KeyringError` if the key
+Replaces the stored value for an existing key. Raises `KeyringSecretNotFoundError` if the key
 does not exist — use `add_secret()` first.
 
 ```python
@@ -114,7 +114,7 @@ cb keyring update github_token --secret github_token=ghp_new --service-name myap
 
 ### delete_secret
 
-Removes a secret from the keyring. Raises `KeyringError` if the key does not
+Removes a secret from the keyring. Raises `KeyringSecretNotFoundError` if the key does not
 exist.
 
 ```python
@@ -167,29 +167,37 @@ print(secret["port"])  # 5432
 ## Error handling
 
 ```python
-from credential_bridge import KeyringError
+from credential_bridge import KeyringError, KeyringSecretNotFoundError
 
+# Distinguish "not found" from other keyring failures
+try:
+    secret = backend.get_secret("missing_key")
+except KeyringSecretNotFoundError:
+    print("Key does not exist — check the name and service_name")
+except KeyringError as e:
+    print(f"Keyring backend error: {e}")
+
+# Catch duplicate on add
 try:
     backend.add_secret("github_token", {"github_token": "ghp_xxx"})
 except KeyringError as e:
-    # Raised when key already exists
-    print(f"Keyring error: {e}")
+    # Key already exists
+    print(f"Already exists: {e}")
 
+# Safe upsert pattern
 try:
-    secret = backend.get_secret("missing_key")
-except KeyringError as e:
-    # Raised when key is not found
-    print(f"Not found: {e}")
+    backend.add_secret("github_token", {"github_token": "ghp_xxx"})
+except KeyringError:
+    backend.update_secret("github_token", {"github_token": "ghp_xxx"})
 ```
 
 ### Common errors
 
 | Exception | Cause | Resolution |
 |---|---|---|
-| `KeyringError: already exists` | `add_secret()` called on an existing key | Use `update_secret()` to change the value |
-| `KeyringError: does not exist` | `update_secret()` called on a missing key | Use `add_secret()` first |
-| `KeyringError: not found` | `get_secret()` or `delete_secret()` on a missing key | Verify the key name |
-| `KeyringError: not supported` | `list_secrets()` called | Platform limitation — track key names manually |
+| `KeyringError` | `add_secret()` called on an existing key | Use `update_secret()` to change the value |
+| `KeyringSecretNotFoundError` | `get_secret()`, `update_secret()`, or `delete_secret()` called with a key that does not exist | Verify the key name and `service_name` match what was used when adding |
+| `KeyringError` | `list_secrets()` called | Platform limitation — track key names manually |
 | `ConfigurationError` | `logger` argument is not a `PyLogShield` instance | Pass a valid `PyLogShield` instance |
 
-`KeyringError` is a subclass of `BackendError`.
+`KeyringSecretNotFoundError` is a subclass of `KeyringError`, which is itself a subclass of `BackendError`.

@@ -48,8 +48,11 @@ Select an auth type first:
 
 The token is validated against Vault before being saved. Saved credentials are loaded automatically on the next session — you won't be prompted again unless they expire.
 
-!!! tip "VAULT_ADDR required"
-    Set `VAULT_ADDR` before launching the wizard:
+!!! tip "Vault address"
+    The wizard reads the Vault address from `VAULT_ADDR` **or** from
+    `~/.vault_config.json` (written automatically when you save credentials in a
+    previous session). If neither is configured, credential validation will fail
+    with a clear message. To set it explicitly before launching:
     ```bash
     export VAULT_ADDR=https://vault.example.com
     ```

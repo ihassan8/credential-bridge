@@ -13,6 +13,10 @@ Choose the right backend for your use case.
 | **Cross-platform** | ✓ | ✓ | ✓ |
 | **Audit log** | ✓ | ✗ | ✗ |
 | **Requires server** | ✓ | ✗ | ✗ |
+| **`add_secret` if exists** | Creates new version (safe) | Raises `KeyringError` | Raises `EnvFileKeyExistsError` |
+| **`update_secret` behaviour** | Merges (other keys kept) | Replaces entire dict | Replaces matching lines |
+| **`get_secret` by group label** | ✗ | ✗ | ✓ |
+| **`delete_secret` by group label** | ✗ | ✗ | ✓ |
 
 ## Decision guide
 

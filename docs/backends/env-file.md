@@ -48,18 +48,20 @@ backend.list_secrets()  # Still reads /home/user/project/.env
 
 ## The `name` parameter
 
-The `name` argument to `add_secret` and the operation methods has different
-semantics depending on the operation:
+The `name` argument has different semantics depending on the operation:
 
 - **`add_secret(name, secret)`** — `name` is written as a comment header
-  (`# name`) above the new keys. It acts as a human-readable label for the
-  group of keys being added. It is **not** itself stored as a key.
-- **`get_secret(name)`** — `name` is the exact environment variable key to look
-  up (e.g. `"DB_HOST"`).
-- **`update_secret(name, secret)`** — `name` is passed for consistency with the
-  base interface but the actual keys updated are the ones in the `secret` dict.
-- **`delete_secret(name)`** — `name` is the exact environment variable key to
-  remove.
+  (`# name`) above the new keys. It acts as a human-readable group label and
+  is **not** itself stored as an env-var key.
+- **`get_secret(name)`** — `name` is either an exact env-var key (e.g.
+  `"DB_HOST"`) **or** a group label (e.g. `"database"`). If `name` matches a
+  key directly, a single-entry dict is returned. If it matches a group comment
+  header, all keys under that group are returned together.
+- **`update_secret(name, secret)`** — `name` is passed for consistency but the
+  actual keys updated are determined by the `secret` dict, not `name`.
+- **`delete_secret(name)`** — `name` is either an exact env-var key **or** a
+  group label. Passing a group label removes all keys under that group and the
+  comment header in one operation.
 
 ## File format
 
@@ -131,8 +133,10 @@ cb env add API_KEY --secret API_KEY=sk-abc123
 
 ### get_secret
 
-Returns a single-key dict for the given environment variable name. Raises
-`EnvFileNotFoundError` if the key is not present in the file.
+Accepts either an env-var key or a group label. Raises `EnvFileNotFoundError`
+if neither is found.
+
+**By key name** — returns a single-entry dict:
 
 ```python
 result = backend.get_secret("DB_HOST")
@@ -142,10 +146,26 @@ result = backend.get_secret("API_KEY")
 # {"API_KEY": "sk-abc123"}
 ```
 
+**By group label** — returns all keys under the matching `# label` comment block:
+
+```python
+# .env contains:
+# # database
+# DB_HOST=localhost
+# DB_PORT=5432
+
+result = backend.get_secret("database")
+# {"DB_HOST": "localhost", "DB_PORT": "5432"}
+```
+
+If a key happens to share its name with a group label, the key lookup takes
+precedence.
+
 CLI equivalent:
 
 ```bash
 cb env get DB_HOST
+cb env get database          # group label lookup
 cb env get API_KEY --path config/.env
 ```
 
@@ -170,19 +190,30 @@ cb env update DB_HOST --secret DB_HOST=prod-db.example.com
 
 ### delete_secret
 
-Removes the line for the specified key. If the deleted key was the last key
-under a `# group_name` comment header, that header is also removed
-automatically, keeping the file clean. Raises `EnvFileNotFoundError` if the key
-does not exist.
+Accepts either an env-var key or a group label. Raises `EnvFileNotFoundError`
+if neither is found.
+
+**By key name** — removes the matching `KEY=VALUE` line. If that was the last
+key under its `# group_name` comment header, the header is removed too,
+keeping the file clean.
 
 ```python
 backend.delete_secret("API_KEY")
+```
+
+**By group label** — removes all `KEY=VALUE` lines under the matching `# label`
+comment and the comment header itself in a single operation.
+
+```python
+# Removes # database, DB_HOST=..., and DB_PORT=... in one call
+backend.delete_secret("database")
 ```
 
 CLI equivalent:
 
 ```bash
 cb env delete API_KEY --yes
+cb env delete database --yes   # deletes the whole group
 ```
 
 ### list_secrets
@@ -269,7 +300,8 @@ except EnvFileNotFoundError:
 | Exception | Cause | Resolution |
 |---|---|---|
 | `EnvFileKeyExistsError` | `add_secret()` called when one or more keys already exist | Use `update_secret()` to change existing keys |
-| `EnvFileNotFoundError` | `get_secret()` or `delete_secret()` called with a key not in the file | Check the key name with `list_secrets()` |
+| `EnvFileNotFoundError` | `get_secret()` called with a key or group label not in the file | Check key names with `list_secrets()`; check group labels by reading the file |
+| `EnvFileNotFoundError` | `delete_secret()` called with a key or group label not in the file | Verify the name with `list_secrets()` |
 | `EnvFileNotFoundError` | `update_secret()` called when one or more specified keys are missing | Use `add_secret()` to create them first |
 
 `EnvFileNotFoundError` and `EnvFileKeyExistsError` are both subclasses of

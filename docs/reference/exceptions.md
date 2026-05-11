@@ -6,17 +6,18 @@ All credential-bridge exceptions inherit from `CredentialBridgeError`. Catch the
 
 ```
 CredentialBridgeError
-├── BackendError                       base for all backend errors
-│   ├── VaultError                     general Vault error
-│   │   ├── VaultAuthError             bad token / AppRole credentials
-│   │   ├── VaultConnectionError       unreachable server or bad URL
-│   │   └── VaultSecretNotFoundError   secret path does not exist
-│   ├── KeyringError                   OS keyring error
-│   └── EnvFileError                   .env file error
-│       ├── EnvFileNotFoundError       requested key not in file
-│       └── EnvFileKeyExistsError      add_secret called on existing key
-├── BackendNotRegisteredError          unknown backend name in SecretsManager
-└── ConfigurationError                 missing required config (URL, credentials)
+├── BackendError                          base for all backend errors
+│   ├── VaultError                        general Vault error
+│   │   ├── VaultAuthError                bad token / AppRole credentials
+│   │   ├── VaultConnectionError          unreachable server or bad URL
+│   │   └── VaultSecretNotFoundError      secret path does not exist
+│   ├── KeyringError                      OS keyring error
+│   │   └── KeyringSecretNotFoundError    key does not exist in keyring
+│   └── EnvFileError                      .env file error
+│       ├── EnvFileNotFoundError          requested key or group not in file
+│       └── EnvFileKeyExistsError         add_secret called on existing key
+├── BackendNotRegisteredError             unknown backend name in SecretsManager
+└── ConfigurationError                    missing required config (URL, credentials)
 ```
 
 ## Import
@@ -30,6 +31,7 @@ from credential_bridge import (
     VaultConnectionError,
     VaultSecretNotFoundError,
     KeyringError,
+    KeyringSecretNotFoundError,
     EnvFileError,
     EnvFileNotFoundError,
     EnvFileKeyExistsError,
@@ -67,6 +69,18 @@ except VaultConnectionError:
     print("Cannot reach Vault — check VAULT_ADDR")
 except VaultError as e:
     print(f"General Vault error: {e}")
+```
+
+### Keyring-specific handling
+```python
+from credential_bridge import KeyringError, KeyringSecretNotFoundError
+
+try:
+    secret = backend.get_secret("my_token")
+except KeyringSecretNotFoundError:
+    print("Key does not exist in the keyring")
+except KeyringError as e:
+    print(f"Keyring backend failure: {e}")
 ```
 
 ### .env file handling

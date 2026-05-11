@@ -30,6 +30,45 @@ sm = SecretsManager("env", path=".env")
 sm = SecretsManager("vault", vault_url="https://vault.example.com", vault_token="s.xxx")
 ```
 
+## Backend semantic differences
+
+The five methods share a common signature but their behaviour varies by backend in two important places.
+
+### `add_secret`
+
+| Backend | Behaviour when name/key already exists |
+|---|---|
+| `VaultBackend` | Creates a new KV-v2 version — **idempotent / safe to call again** |
+| `KeyringBackend` | Raises `KeyringError` — use `update_secret()` instead |
+| `EnvFileBackend` | Raises `EnvFileKeyExistsError` — use `update_secret()` instead |
+
+Write defensive code if your backend is configured at runtime:
+
+```python
+from credential_bridge import KeyringError, EnvFileKeyExistsError
+
+try:
+    sm.add_secret("myapp/db", {"user": "admin"})
+except (KeyringError, EnvFileKeyExistsError):
+    sm.update_secret("myapp/db", {"user": "admin"})
+```
+
+### `update_secret`
+
+| Backend | Behaviour |
+|---|---|
+| `VaultBackend` | **Merges** — only supplied keys are updated; all other fields in the current version are preserved |
+| `KeyringBackend` | **Replaces** — the entire stored dict is overwritten with the new value |
+| `EnvFileBackend` | **In-place replace** — only matching lines are rewritten; other keys in the file are untouched; raises if any supplied key is missing |
+
+When using `KeyringBackend`, fetch the existing dict first if you want to update a single field without losing others:
+
+```python
+existing = sm.get_secret("database")
+existing["password"] = "new_password"
+sm.update_secret("database", existing)
+```
+
 ## Accessing backend-specific methods
 
 The `backend` property exposes the underlying instance for operations beyond the five-method contract:
