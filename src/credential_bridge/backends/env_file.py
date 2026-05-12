@@ -21,8 +21,8 @@ def _quote_value(value: str) -> str:
                     return value
                 break
     # Needs quoting if contains spaces or special chars
-    if any(c in value for c in (' ', '\t', '\n', '\r', '#', '"', "'", '\\', '$', '`')):
-        escaped = value.replace('\\', '\\\\').replace('"', '\\"')
+    if any(c in value for c in (" ", "\t", "\n", "\r", "#", '"', "'", "\\", "$", "`")):
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
         return f'"{escaped}"'
     return value
 
@@ -58,7 +58,7 @@ class EnvFileBackend(BaseSecretBackend):
 
     def _parse_lines(self, lines: List[str]) -> Dict[str, str]:
         """Parse dotenv key=value pairs from already-read lines (single file read)."""
-        return dict(dotenv_values(stream=StringIO("".join(lines))))
+        return dict(dotenv_values(stream=StringIO("".join(lines))))  # type: ignore[arg-type]
 
     def _current_keys(self) -> Dict[str, str]:
         return self._parse_lines(self._read_lines()) if self.path.exists() else {}
@@ -90,8 +90,7 @@ class EnvFileBackend(BaseSecretBackend):
         conflicts = [k for k in secret if k in existing]
         if conflicts:
             raise EnvFileKeyExistsError(
-                f"Key(s) already exist in {self.path}: {conflicts}. "
-                "Use update_secret() to change them."
+                f"Key(s) already exist in {self.path}: {conflicts}. Use update_secret() to change them."
             )
         lines = self._read_lines()
         lines.append(f"\n# {name}\n")
@@ -115,9 +114,7 @@ class EnvFileBackend(BaseSecretBackend):
         existing = self._current_keys()
         missing = [k for k in secret if k not in existing]
         if missing:
-            raise EnvFileNotFoundError(
-                f"Key(s) {missing} not found in {self.path}. Use add_secret() first."
-            )
+            raise EnvFileNotFoundError(f"Key(s) {missing} not found in {self.path}. Use add_secret() first.")
         lines = self._read_lines()
         updated: Dict[str, str] = {}
         new_lines = []
@@ -140,10 +137,11 @@ class EnvFileBackend(BaseSecretBackend):
         # Case 1: name is a direct key
         if name in existing:
             key_idx = next(
-                (i for i, line in enumerate(lines)
-                 if "=" in line
-                 and not line.strip().startswith("#")
-                 and line.split("=", 1)[0].strip() == name),
+                (
+                    i
+                    for i, line in enumerate(lines)
+                    if "=" in line and not line.strip().startswith("#") and line.split("=", 1)[0].strip() == name
+                ),
                 None,
             )
             to_remove: set = set()

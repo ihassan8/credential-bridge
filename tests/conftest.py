@@ -1,6 +1,6 @@
 # tests/conftest.py
+
 import pytest
-from pathlib import Path
 
 
 @pytest.fixture
@@ -21,6 +21,7 @@ def populated_env_file(tmp_path):
 def clean_registry():
     """Isolate SecretsManager._registry state between all tests."""
     from credential_bridge.manager import SecretsManager
+
     original = dict(SecretsManager._registry)
     yield
     SecretsManager._registry = original

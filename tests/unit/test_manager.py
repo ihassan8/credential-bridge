@@ -1,18 +1,31 @@
 # tests/unit/test_manager.py
 import pytest
-from credential_bridge.manager import SecretsManager
+
 from credential_bridge.backends.base import BaseSecretBackend
 from credential_bridge.exceptions import BackendNotRegisteredError
+from credential_bridge.manager import SecretsManager
 
 
 class FakeBackend(BaseSecretBackend):
     backend_name = "fake"
-    def __init__(self, **kwargs): self.kwargs = kwargs
-    def add_secret(self, name, secret): pass
-    def get_secret(self, name): return {"key": "val"}
-    def update_secret(self, name, secret): pass
-    def delete_secret(self, name): pass
-    def list_secrets(self, path=""): return ["a", "b"]
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+    def add_secret(self, name, secret):
+        pass
+
+    def get_secret(self, name):
+        return {"key": "val"}
+
+    def update_secret(self, name, secret):
+        pass
+
+    def delete_secret(self, name):
+        pass
+
+    def list_secrets(self, path=""):
+        return ["a", "b"]
 
 
 def test_register_and_use_custom_backend():

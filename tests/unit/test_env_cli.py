@@ -1,6 +1,7 @@
 # tests/unit/test_env_cli.py
 import pytest
 from typer.testing import CliRunner
+
 from credential_bridge.cli.env_cli import app
 
 runner = CliRunner()

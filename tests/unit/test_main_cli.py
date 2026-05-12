@@ -1,5 +1,6 @@
 # tests/unit/test_main_cli.py
 from typer.testing import CliRunner
+
 from credential_bridge.cli.main import app
 
 runner = CliRunner()

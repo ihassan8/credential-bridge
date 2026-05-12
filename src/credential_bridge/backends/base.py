@@ -28,9 +28,7 @@ class BaseSecretBackend(ABC):
         if abstract_names and overridden >= abstract_names:
             # All abstract methods are implemented — this is a concrete subclass
             if not cls.backend_name:
-                raise TypeError(
-                    f"{cls.__name__} must define a non-empty 'backend_name' class attribute."
-                )
+                raise TypeError(f"{cls.__name__} must define a non-empty 'backend_name' class attribute.")
 
     @abstractmethod
     def add_secret(self, name: str, secret: Dict[str, Any]) -> None:

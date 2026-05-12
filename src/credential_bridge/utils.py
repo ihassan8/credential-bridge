@@ -26,6 +26,7 @@ def load_welcome_banner(file_path: str) -> str:
 def save_config(data: Dict[str, Any]) -> None:
     """Save configuration data to CONFIG_FILE as JSON."""
     import sys
+
     if sys.platform != "win32":
         # Write with restricted permissions so only the owner can read the file
         fd = os.open(str(CONFIG_FILE), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -47,7 +48,7 @@ def load_config() -> Dict[str, Any]:
     """Load configuration data from CONFIG_FILE. Returns empty dict if file doesn't exist."""
     logger.debug("Loading config file...")
     if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:  # type: ignore[no-any-return]
             return json.load(f)
     return {}
 
@@ -91,5 +92,3 @@ def get_session(
     if proxies:
         logger.debug("Session created with proxies configured (%d entries)", len(proxies))
     return session
-
-

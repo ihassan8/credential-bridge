@@ -1,6 +1,7 @@
 # src/credential_bridge/cli/main.py
+from importlib.metadata import PackageNotFoundError, version
+
 import typer
-from importlib.metadata import version, PackageNotFoundError
 
 from .env_cli import app as env_app
 from .keyring_cli import app as keyring_app
@@ -30,7 +31,9 @@ def _version_callback(value: bool) -> None:
 @app.callback()
 def root_callback(
     version: bool = typer.Option(  # noqa: F811
-        False, "--version", "-V",
+        False,
+        "--version",
+        "-V",
         callback=_version_callback,
         is_eager=True,
         help="Show version and exit.",
@@ -43,6 +46,7 @@ def root_callback(
 def wizard():
     """Launch the interactive secrets wizard."""
     from ..prompt_wizard import main as _wizard_main
+
     _wizard_main()
 
 

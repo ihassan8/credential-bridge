@@ -15,7 +15,8 @@ from rich.text import Text
 
 # Importing _output triggers the Windows UTF-8 reconfiguration and provides
 # shared Rich helpers so we don't duplicate them here.
-from .cli._output import print_result as _print_result_dict, print_table as _print_result_list
+from .cli._output import print_result as _print_result_dict
+from .cli._output import print_table as _print_result_list
 from .utils import get_vault_credentials, load_config, load_welcome_banner, save_config
 
 # ── Rich console ──────────────────────────────────────────────────────────────
@@ -30,6 +31,7 @@ _history = InMemoryHistory()
 
 
 # ── Output helpers ─────────────────────────────────────────────────────────────
+
 
 def _success(msg: str) -> None:
     console.print(f"  [green]✓[/green]  {msg}")
@@ -86,25 +88,32 @@ def _prompt(text: str, completer=None, is_password: bool = False) -> str:
 
 def _menu_prompt(text: str, completer=None) -> str:
     """Menu-style prompt with cyan styling."""
-    return prompt(
-        HTML(text),
-        completer=completer,
-        history=_history,
-        style=_opt_style,
-    ).strip().lower()
+    return (
+        prompt(
+            HTML(text),
+            completer=completer,
+            history=_history,
+            style=_opt_style,
+        )
+        .strip()
+        .lower()
+    )
 
 
 # ── Vault credential validation ───────────────────────────────────────────────
 
+
 def is_vault_cred_valid(vault_token=None, role_id=None, secret_id=None) -> bool:
     """Validate Vault credentials by attempting authentication through VaultBackend."""
     import os
+
     vault_addr = os.environ.get("VAULT_ADDR") or load_config().get("vault_addr")
     if not vault_addr:
         _error("No Vault address configured. Set VAULT_ADDR or save it via the wizard.")
         return False
     try:
         from .manager import SecretsManager
+
         kwargs: dict = {"vault_url": vault_addr}
         if vault_token:
             kwargs["vault_token"] = vault_token
@@ -123,13 +132,12 @@ def is_vault_cred_valid(vault_token=None, role_id=None, secret_id=None) -> bool:
 
 # ── Main entry point ─────────────────────────────────────────────────────────
 
+
 def main() -> None:
     _print_banner()
     while True:
         _section("Main Menu")
-        service_completer = WordCompleter(
-            ["keyring", "vault", "env", "exit"], ignore_case=True
-        )
+        service_completer = WordCompleter(["keyring", "vault", "env", "exit"], ignore_case=True)
         try:
             service = _menu_prompt(
                 "<b><ansibrightcyan>▶ Backend</ansibrightcyan></b>"
@@ -166,12 +174,11 @@ def _goodbye() -> None:
 
 # ── Keyring menu ─────────────────────────────────────────────────────────────
 
+
 def configure_keyring() -> None:
     while True:
         _section("Keyring")
-        action_completer = WordCompleter(
-            ["add", "update", "delete", "get", "back"], ignore_case=True
-        )
+        action_completer = WordCompleter(["add", "update", "delete", "get", "back"], ignore_case=True)
         action = _menu_prompt(
             "<b><ansibrightcyan>[Keyring]</ansibrightcyan></b>"
             "  <ansiwhite>(add / get / update / delete / back):</ansiwhite>  ",
@@ -200,15 +207,13 @@ def configure_keyring() -> None:
 
 # ── Vault menu ────────────────────────────────────────────────────────────────
 
+
 def configure_vault() -> None:
     while True:
         _section("Vault  ·  Authentication")
-        auth_completer = WordCompleter(
-            ["vault_token", "approle", "back"], ignore_case=True
-        )
+        auth_completer = WordCompleter(["vault_token", "approle", "back"], ignore_case=True)
         auth_type = _menu_prompt(
-            "<b><ansibrightcyan>[Vault]</ansibrightcyan></b>"
-            "  <ansiwhite>(vault_token / approle / back):</ansiwhite>  ",
+            "<b><ansibrightcyan>[Vault]</ansibrightcyan></b>  <ansiwhite>(vault_token / approle / back):</ansiwhite>  ",
             completer=auth_completer,
         )
 
@@ -284,45 +289,59 @@ def configure_vault() -> None:
                 else:
                     _success("Existing AppRole credentials are valid.")
 
-        _vault_action_loop(auth_type, vault_token=vault_token, vault_role_id=vault_role_id, vault_secret_id=vault_secret_id)
+        _vault_action_loop(
+            auth_type, vault_token=vault_token, vault_role_id=vault_role_id, vault_secret_id=vault_secret_id
+        )
         return
 
 
 def _save_vault_token(token: str) -> None:
     import os
+
     cfg = load_config()
-    cfg.update({
-        "vault_token": token,
-        "vault_role_id": None,
-        "vault_secret_id": None,
-        "vault_addr": os.environ.get("VAULT_ADDR", ""),
-    })
+    cfg.update(
+        {
+            "vault_token": token,
+            "vault_role_id": None,
+            "vault_secret_id": None,
+            "vault_addr": os.environ.get("VAULT_ADDR", ""),
+        }
+    )
     save_config(cfg)
 
 
 def _save_vault_approle(role_id: str, secret_id: str) -> None:
     import os
+
     cfg = load_config()
-    cfg.update({
-        "vault_role_id": role_id,
-        "vault_secret_id": secret_id,
-        "vault_token": None,
-        "vault_addr": os.environ.get("VAULT_ADDR", ""),
-    })
+    cfg.update(
+        {
+            "vault_role_id": role_id,
+            "vault_secret_id": secret_id,
+            "vault_token": None,
+            "vault_addr": os.environ.get("VAULT_ADDR", ""),
+        }
+    )
     save_config(cfg)
 
 
 def _vault_action_loop(auth_label: str, vault_token=None, vault_role_id=None, vault_secret_id=None) -> None:
     _VAULT_ACTIONS = [
-        "add", "update", "delete", "get", "list",
-        "read-metadata", "delete-versions", "undelete-versions",
-        "destroy-versions", "get-config", "back",
+        "add",
+        "update",
+        "delete",
+        "get",
+        "list",
+        "read-metadata",
+        "delete-versions",
+        "undelete-versions",
+        "destroy-versions",
+        "get-config",
+        "back",
     ]
     action_completer = WordCompleter(_VAULT_ACTIONS, ignore_case=True)
 
-    service_name = _prompt(
-        "<b><ansibrightgreen>  Service name (tag):</ansibrightgreen></b>    "
-    )
+    service_name = _prompt("<b><ansibrightgreen>  Service name (tag):</ansibrightgreen></b>    ")
 
     while True:
         _section(f"Vault  ·  {auth_label.replace('_', ' ').title()}")
@@ -338,9 +357,7 @@ def _vault_action_loop(auth_label: str, vault_token=None, vault_role_id=None, va
             _error(f"Unknown action '{action}'.")
             continue
 
-        secret_path = _prompt(
-            "<b><ansibrightgreen>  Secret path (e.g. myapp/db):</ansibrightgreen></b>  "
-        )
+        secret_path = _prompt("<b><ansibrightgreen>  Secret path (e.g. myapp/db):</ansibrightgreen></b>  ")
 
         secret_data: dict = {}
         versions = None
@@ -348,11 +365,7 @@ def _vault_action_loop(auth_label: str, vault_token=None, vault_role_id=None, va
         if action in ["add", "update"]:
             while True:
                 try:
-                    num = int(
-                        _prompt(
-                            "<b><ansibrightgreen>  Number of key-value pairs:</ansibrightgreen></b>  "
-                        )
-                    )
+                    num = int(_prompt("<b><ansibrightgreen>  Number of key-value pairs:</ansibrightgreen></b>  "))
                     break
                 except ValueError:
                     _error("Please enter a numeric value.")
@@ -368,41 +381,42 @@ def _vault_action_loop(auth_label: str, vault_token=None, vault_role_id=None, va
         if action in ["delete-versions", "undelete-versions", "destroy-versions"]:
             while True:
                 try:
-                    num = int(
-                        _prompt(
-                            "<b><ansibrightgreen>  Number of versions:</ansibrightgreen></b>  "
-                        )
-                    )
+                    num = int(_prompt("<b><ansibrightgreen>  Number of versions:</ansibrightgreen></b>  "))
                     versions = []
                     for _ in range(num):
-                        versions.append(
-                            int(_prompt("<b><ansibrightgreen>  Version number:</ansibrightgreen></b>  "))
-                        )
+                        versions.append(int(_prompt("<b><ansibrightgreen>  Version number:</ansibrightgreen></b>  ")))
                     break
                 except ValueError:
                     _error("Please enter numeric values for versions.")
 
-        run_vault_cli(action, service_name, secret_path, secret_data, versions,
-                      vault_token=vault_token, vault_role_id=vault_role_id, vault_secret_id=vault_secret_id)
+        run_vault_cli(
+            action,
+            service_name,
+            secret_path,
+            secret_data,
+            versions,
+            vault_token=vault_token,
+            vault_role_id=vault_role_id,
+            vault_secret_id=vault_secret_id,
+        )
         console.print()
 
 
 # ── .env menu ────────────────────────────────────────────────────────────────
 
+
 def configure_env() -> None:
     _section(".env File")
-    env_path = _prompt(
-        "<b><ansibrightgreen>  .env file path</ansibrightgreen></b>"
-        "  <ansiwhite>(default: .env):</ansiwhite>  "
-    ) or ".env"
+    env_path = (
+        _prompt("<b><ansibrightgreen>  .env file path</ansibrightgreen></b>  <ansiwhite>(default: .env):</ansiwhite>  ")
+        or ".env"
+    )
 
     from .backends.env_file import EnvFileBackend
 
     while True:
         _section(f".env  ·  {env_path}")
-        action_completer = WordCompleter(
-            ["add", "get", "update", "delete", "list", "back"], ignore_case=True
-        )
+        action_completer = WordCompleter(["add", "get", "update", "delete", "list", "back"], ignore_case=True)
         action = _menu_prompt(
             f"<b><ansibrightcyan>[.env › {env_path}]</ansibrightcyan></b>"
             "  <ansiwhite>(add / get / update / delete / list / back):</ansiwhite>  ",
@@ -426,10 +440,13 @@ def configure_env() -> None:
                 name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen></b>   ")
                 value = _prompt("<b><ansibrightgreen>  Value:</ansibrightgreen></b>      ")
                 if action == "add":
-                    label = _prompt(
-                        "<b><ansibrightgreen>  Group label</ansibrightgreen></b>"
-                        "  <ansiwhite>(leave blank to use key name):</ansiwhite>  "
-                    ) or name
+                    label = (
+                        _prompt(
+                            "<b><ansibrightgreen>  Group label</ansibrightgreen></b>"
+                            "  <ansiwhite>(leave blank to use key name):</ansiwhite>  "
+                        )
+                        or name
+                    )
                     backend.add_secret(label, {name: value})
                 else:
                     backend.update_secret(name, {name: value})
@@ -453,8 +470,10 @@ def configure_env() -> None:
 
 # ── Dispatch helpers ─────────────────────────────────────────────────────────
 
+
 def run_keyring_cli(action: str, service_name: str, name: str, secret: Optional[str]) -> None:
     from .manager import SecretsManager
+
     manager = SecretsManager("keyring", service_name=service_name)
     try:
         if action == "add":
@@ -484,7 +503,9 @@ def run_vault_cli(
     vault_secret_id=None,
 ) -> None:
     import os
+
     from .manager import SecretsManager
+
     vault_url = os.environ.get("VAULT_ADDR") or load_config().get("vault_addr")
     manager = SecretsManager(
         "vault",
@@ -493,25 +514,24 @@ def run_vault_cli(
         vault_token=vault_token,
         vault_role_id=vault_role_id,
         vault_secret_id=vault_secret_id,
-    )
+    )  # type: ignore[attr-defined]
     try:
         if action == "add":
-            manager.add_secret(secret_path, secret_data)
+            manager.add_secret(secret_path, secret_data)  # type: ignore[attr-defined]
             _success(f"Secret [bold]{secret_path}[/bold] added.")
         elif action == "get":
-            result = manager.get_secret(secret_path)
+            result = manager.get_secret(secret_path)  # type: ignore[attr-defined]
             _print_result_dict(result, title=secret_path)
         elif action == "update":
-            manager.update_secret(secret_path, secret_data)
+            manager.update_secret(secret_path, secret_data)  # type: ignore[attr-defined]
             _success(f"Secret [bold]{secret_path}[/bold] updated.")
         elif action == "delete":
-            manager.delete_secret(secret_path)
+            manager.delete_secret(secret_path)  # type: ignore[attr-defined]
             _success(f"Secret [bold]{secret_path}[/bold] deleted.")
         elif action == "list":
             keys = manager.list_secrets(secret_path)
             _print_result_list(keys, title=f"Secrets at {secret_path or '/'}")
-        elif action in ("read-metadata", "delete-versions", "undelete-versions",
-                        "destroy-versions", "get-config"):
+        elif action in ("read-metadata", "delete-versions", "undelete-versions", "destroy-versions", "get-config"):
             vault_backend = manager.backend
             if action == "read-metadata":
                 meta = vault_backend.read_secret_metadata(secret_path)

@@ -1,8 +1,10 @@
 # tests/unit/test_env_file_backend.py
-import pytest
 from pathlib import Path
+
+import pytest
+
 from credential_bridge.backends.env_file import EnvFileBackend
-from credential_bridge.exceptions import EnvFileError, EnvFileNotFoundError
+from credential_bridge.exceptions import EnvFileNotFoundError
 
 
 @pytest.fixture
@@ -37,6 +39,7 @@ def test_add_secret_writes_group_comment(backend, tmp_path):
 
 def test_add_secret_raises_if_key_exists(populated_backend):
     from credential_bridge.exceptions import EnvFileKeyExistsError
+
     with pytest.raises(EnvFileKeyExistsError):
         populated_backend.add_secret("EXISTING", {"EXISTING": "new_value"})
 
@@ -93,6 +96,7 @@ def test_list_secrets(tmp_path):
 
 def test_load_into_environ_on_add(tmp_path, monkeypatch):
     import os
+
     env_file = tmp_path / ".env"
     backend = EnvFileBackend(path=env_file, load_into_environ=True)
     backend.add_secret("MY_VAR", {"MY_VAR": "hello"})
@@ -125,6 +129,7 @@ def test_add_secret_quotes_value_with_spaces(backend, tmp_path):
 
 def test_env_full_crud(tmp_path):
     from credential_bridge.backends.env_file import EnvFileBackend
+
     backend = EnvFileBackend(path=tmp_path / ".env")
 
     # Add
@@ -146,6 +151,7 @@ def test_env_full_crud(tmp_path):
 
 def test_env_multi_key_group(tmp_path):
     from credential_bridge.backends.env_file import EnvFileBackend
+
     backend = EnvFileBackend(path=tmp_path / ".env")
 
     backend.add_secret("database", {"DB_HOST": "localhost", "DB_PORT": "5432"})
@@ -184,6 +190,7 @@ def test_delete_secret_by_group_name_raises_if_group_missing(backend):
 
 def test_load_into_environ_on_update(tmp_path, monkeypatch):
     import os
+
     env_file = tmp_path / ".env"
     env_file.write_text("MY_VAR=hello\n", encoding="utf-8")
     backend = EnvFileBackend(path=env_file, load_into_environ=True)
@@ -194,6 +201,7 @@ def test_load_into_environ_on_update(tmp_path, monkeypatch):
 
 def test_load_into_environ_on_delete(tmp_path, monkeypatch):
     import os
+
     env_file = tmp_path / ".env"
     env_file.write_text("MY_VAR=hello\n", encoding="utf-8")
     monkeypatch.setenv("MY_VAR", "hello")

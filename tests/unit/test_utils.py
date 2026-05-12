@@ -1,6 +1,5 @@
-import json
 from pathlib import Path
-import pytest
+
 import credential_bridge.utils as u
 
 
@@ -22,6 +21,7 @@ def test_save_and_load_config_roundtrip(tmp_path, monkeypatch):
 
 def test_get_session_returns_requests_session():
     import requests
+
     session = u.get_session()
     assert isinstance(session, requests.Session)
     assert session.verify is True

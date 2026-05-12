@@ -7,20 +7,23 @@ import typer
 from ..backends.vault import VaultBackend
 from ..exceptions import CredentialBridgeError, VaultSecretNotFoundError
 from ._output import (
-    console, err_console,
-    parse_secrets, prompt_secrets_interactive,
-    print_error, print_result, print_success, print_table,
+    parse_secrets,
+    print_error,
+    print_result,
+    print_success,
+    print_table,
+    prompt_secrets_interactive,
 )
 
 app = typer.Typer(name="vault", help="HashiCorp Vault secret operations", no_args_is_help=True)
 
 # Shared auth option defaults
-_VAULT_URL    = typer.Option(None,              "--vault-url",       envvar="VAULT_ADDR",      help="Vault server URL (or set VAULT_ADDR)")
-_VAULT_TOKEN  = typer.Option(None,              "--vault-token",     envvar="VAULT_TOKEN",     help="Vault token")
-_ROLE_ID      = typer.Option(None,              "--vault-role-id",   envvar="VAULT_ROLE_ID",   help="AppRole role ID")
-_SECRET_ID    = typer.Option(None,              "--vault-secret-id", envvar="VAULT_SECRET_ID", help="AppRole secret ID")
-_SERVICE_NAME = typer.Option("default_service", "--service-name",                              help="Service name (logging tag)")
-_MOUNT_POINT  = typer.Option(None,              "--mount-point",                               help="Vault KV-v2 mount point (default: current OS username)")
+_VAULT_URL = typer.Option(None, "--vault-url", envvar="VAULT_ADDR", help="Vault server URL (or set VAULT_ADDR)")
+_VAULT_TOKEN = typer.Option(None, "--vault-token", envvar="VAULT_TOKEN", help="Vault token")
+_ROLE_ID = typer.Option(None, "--vault-role-id", envvar="VAULT_ROLE_ID", help="AppRole role ID")
+_SECRET_ID = typer.Option(None, "--vault-secret-id", envvar="VAULT_SECRET_ID", help="AppRole secret ID")
+_SERVICE_NAME = typer.Option("default_service", "--service-name", help="Service name (logging tag)")
+_MOUNT_POINT = typer.Option(None, "--mount-point", help="Vault KV-v2 mount point (default: current OS username)")
 
 
 def _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point):

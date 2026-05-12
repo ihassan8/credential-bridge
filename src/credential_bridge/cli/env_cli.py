@@ -6,7 +6,7 @@ import typer
 
 from ..backends.env_file import EnvFileBackend
 from ..exceptions import CredentialBridgeError
-from ._output import parse_secrets, prompt_secrets_interactive, print_error, print_result, print_success, print_table
+from ._output import parse_secrets, print_error, print_result, print_success, print_table, prompt_secrets_interactive
 
 app = typer.Typer(name="env", help=".env file secret operations", no_args_is_help=True)
 

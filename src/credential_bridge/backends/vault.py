@@ -8,7 +8,6 @@ import hvac
 import requests
 from pylogshield import LogLevel, PyLogShield, get_logger
 
-from .base import BaseSecretBackend
 from ..exceptions import (
     ConfigurationError,
     VaultAuthError,
@@ -17,6 +16,7 @@ from ..exceptions import (
     VaultSecretNotFoundError,
 )
 from ..utils import get_session, load_config, save_config
+from .base import BaseSecretBackend
 
 
 def _safe_getuser() -> str:
@@ -29,12 +29,7 @@ def _safe_getuser() -> str:
     try:
         return getpass.getuser()
     except (ModuleNotFoundError, KeyError, OSError):
-        return (
-            os.environ.get("USERNAME")
-            or os.environ.get("USER")
-            or os.environ.get("LOGNAME")
-            or "default"
-        )
+        return os.environ.get("USERNAME") or os.environ.get("USER") or os.environ.get("LOGNAME") or "default"
 
 
 class VaultBackend(BaseSecretBackend):
@@ -55,7 +50,7 @@ class VaultBackend(BaseSecretBackend):
         log_level: Union[LogLevel, str] = LogLevel.WARNING,
         logger: Optional[PyLogShield] = None,
         mask: bool = True,
-        persist: bool = False,   # opt-in credential persistence to ~/.vault_config.json
+        persist: bool = False,  # opt-in credential persistence to ~/.vault_config.json
     ) -> None:
         # --- Fail fast: resolve vault address before any other setup ---
         config = load_config()
@@ -67,7 +62,7 @@ class VaultBackend(BaseSecretBackend):
         if not self.vault_addr:
             raise ConfigurationError(
                 "Vault address must be provided via the vault_url argument, "
-                "the VAULT_ADDR environment variable, or ~/.vault_config.json"
+                "the VAULT_ADDR environment variable, or ~/.vault_config.json"  # type: ignore[assignment]
             )
 
         self.mask = mask
@@ -77,10 +72,7 @@ class VaultBackend(BaseSecretBackend):
         self.proxies = proxies
 
         if logger and not isinstance(logger, PyLogShield):
-            raise ConfigurationError(
-                "logger must be a PyLogShield instance. "
-                "Use: from pylogshield import PyLogShield"
-            )
+            raise ConfigurationError("logger must be a PyLogShield instance. Use: from pylogshield import PyLogShield")
         self.logger = logger or get_logger(name="credential_bridge", log_level=log_level, force=True)
 
         self.session = get_session(cert, proxies)
@@ -92,15 +84,12 @@ class VaultBackend(BaseSecretBackend):
 
         # Token and AppRole are mutually exclusive
         if self.vault_token and (self.vault_role_id or self.vault_secret_id):
-            raise ConfigurationError(
-                "Provide either a Vault token or AppRole credentials, not both."
-            )
+            raise ConfigurationError("Provide either a Vault token or AppRole credentials, not both.")
 
         # At least one auth method must be present
         if not self.vault_token and not (self.vault_role_id and self.vault_secret_id):
             raise ConfigurationError(
-                "No authentication method provided. Please provide either a token "
-                "or AppRole credentials."
+                "No authentication method provided. Please provide either a token or AppRole credentials."
             )
 
         # --- Persist credentials to config (opt-in) ---
@@ -123,10 +112,7 @@ class VaultBackend(BaseSecretBackend):
 
     def __repr__(self) -> str:
         auth = "token" if self.vault_token else "approle"
-        return (
-            f"VaultBackend(vault_addr={self.vault_addr!r}, "
-            f"auth={auth!r}, mount_point={self.mount_point!r})"
-        )
+        return f"VaultBackend(vault_addr={self.vault_addr!r}, auth={auth!r}, mount_point={self.mount_point!r})"
 
     # ------------------------------------------------------------------
     # Authentication
@@ -145,9 +131,7 @@ class VaultBackend(BaseSecretBackend):
                     verify=tls_verify,
                 )
                 if not client.is_authenticated():
-                    raise VaultAuthError(
-                        "Failed to authenticate with Vault using token."
-                    )
+                    raise VaultAuthError("Failed to authenticate with Vault using token.")
                 self.logger.info("Authenticated with Vault via token.")
                 return client
 
@@ -162,9 +146,7 @@ class VaultBackend(BaseSecretBackend):
                 secret_id=self.vault_secret_id,
             )
             if "auth" not in auth_response or "client_token" not in auth_response["auth"]:
-                raise VaultAuthError(
-                    "Failed to authenticate with Vault using AppRole."
-                )
+                raise VaultAuthError("Failed to authenticate with Vault using AppRole.")
             client.token = auth_response["auth"]["client_token"]
             self.logger.info("Authenticated with Vault via AppRole.")
             return client
@@ -197,11 +179,8 @@ class VaultBackend(BaseSecretBackend):
                 self.client = self._authenticate()
             else:
                 raise VaultAuthError(f"Vault token is invalid or has expired: {e}") from e
-        except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout,
-                ConnectionError, OSError) as e:
-            raise VaultConnectionError(
-                f"Cannot reach Vault at {self.vault_addr}: {e}"
-            ) from e
+        except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout, ConnectionError, OSError) as e:
+            raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {e}") from e
         except Exception as e:
             self.logger.warning("Token refresh check failed (will retry on next operation): %s", e)
 
@@ -255,7 +234,7 @@ class VaultBackend(BaseSecretBackend):
             )
             self.logger.info(f"Secret updated: {name}")
         except hvac.exceptions.InvalidPath as e:
-            raise VaultSecretNotFoundError(f"Secret path '{name}' does not exist: {e}") from e
+            raise VaultSecretNotFoundError(f"Secret path '{name}' does not exist: {e}") from e  # type: ignore[no-any-return]
         except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout) as exc:
             raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
         except (ConnectionError, OSError) as exc:
@@ -305,16 +284,12 @@ class VaultBackend(BaseSecretBackend):
         """Return the KV engine configuration for the current mount point."""
         self._refresh_token_if_needed()
         try:
-            return self.client.secrets.kv.v2.read_configuration(
-                mount_point=self.mount_point
-            )
+            return self.client.secrets.kv.v2.read_configuration(mount_point=self.mount_point)
         except Exception as exc:
-            raise VaultError(
-                f"Failed to read config for mount '{self.mount_point}': {exc}"
-            ) from exc
+            raise VaultError(f"Failed to read config for mount '{self.mount_point}': {exc}") from exc
 
     def read_secret_metadata(self, name: str) -> Optional[Dict[str, Any]]:
-        """Return metadata and version info for *name*."""
+        """Return metadata and version info for *name*."""  # type: ignore[no-any-return]
         self._refresh_token_if_needed()
         try:
             return self.client.secrets.kv.v2.read_secret_metadata(
@@ -330,29 +305,25 @@ class VaultBackend(BaseSecretBackend):
         try:
             self.client.secrets.kv.v2.delete_secret_versions(
                 path=name,
-                versions=versions,
+                versions=versions,  # type: ignore[no-any-return]
                 mount_point=self.mount_point,
             )
             self.logger.info(f"Soft-deleted versions {versions} of '{name}'.")
         except Exception as exc:
-            raise VaultError(
-                f"Failed to delete versions {versions} of '{name}': {exc}"
-            ) from exc
+            raise VaultError(f"Failed to delete versions {versions} of '{name}': {exc}") from exc
 
     def undelete_secret_versions(self, name: str, versions: List[int]) -> None:
         """Restore soft-deleted versions of *name*."""
         self._refresh_token_if_needed()
         try:
             self.client.secrets.kv.v2.undelete_secret_versions(
-                path=name,
+                path=name,  # type: ignore[no-any-return]
                 versions=versions,
                 mount_point=self.mount_point,
             )
             self.logger.info(f"Undeleted versions {versions} of '{name}'.")
         except Exception as exc:
-            raise VaultError(
-                f"Failed to undelete versions {versions} of '{name}': {exc}"
-            ) from exc
+            raise VaultError(f"Failed to undelete versions {versions} of '{name}': {exc}") from exc
 
     def destroy_secret_versions(self, name: str, versions: List[int]) -> None:
         """Permanently destroy specific versions of *name*."""
@@ -365,6 +336,4 @@ class VaultBackend(BaseSecretBackend):
             )
             self.logger.info(f"Destroyed versions {versions} of '{name}'.")
         except Exception as exc:
-            raise VaultError(
-                f"Failed to destroy versions {versions} of '{name}': {exc}"
-            ) from exc
+            raise VaultError(f"Failed to destroy versions {versions} of '{name}': {exc}") from exc

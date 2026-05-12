@@ -1,6 +1,7 @@
 # tests/unit/test_keyring_cli.py
 import pytest
 from typer.testing import CliRunner
+
 from credential_bridge.cli.keyring_cli import app
 
 runner = CliRunner()

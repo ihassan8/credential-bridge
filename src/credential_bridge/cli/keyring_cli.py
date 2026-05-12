@@ -6,7 +6,7 @@ import typer
 
 from ..backends.keyring import KeyringBackend
 from ..exceptions import CredentialBridgeError
-from ._output import parse_secrets, prompt_secrets_interactive, print_error, print_result, print_success
+from ._output import parse_secrets, print_error, print_result, print_success, prompt_secrets_interactive
 
 app = typer.Typer(name="keyring", help="System keyring secret operations", no_args_is_help=True)
 

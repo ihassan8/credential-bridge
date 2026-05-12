@@ -1,6 +1,8 @@
 import json
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 from credential_bridge.backends.keyring import KeyringBackend
 from credential_bridge.exceptions import KeyringError
 
@@ -27,9 +29,7 @@ def test_add_secret_serializes_to_json(mocker, mock_logger):
     mocker.patch("credential_bridge.backends.keyring.keyring.get_password", return_value=None)
     backend = KeyringBackend(service_name="svc")
     backend.add_secret("mykey", {"user": "admin", "pass": "s3cr3t"})
-    mock_set.assert_called_once_with(
-        "svc", "mykey", json.dumps({"user": "admin", "pass": "s3cr3t"})
-    )
+    mock_set.assert_called_once_with("svc", "mykey", json.dumps({"user": "admin", "pass": "s3cr3t"}))
 
 
 def test_get_secret_deserializes_from_json(mocker, mock_logger):

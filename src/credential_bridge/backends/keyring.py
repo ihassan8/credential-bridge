@@ -51,13 +51,11 @@ class KeyringBackend(BaseSecretBackend):
         try:
             value = keyring.get_password(self.service_name, name)
             if value is None:
-                raise KeyringSecretNotFoundError(
-                    f"Secret '{name}' not found in keyring service '{self.service_name}'."
-                )
+                raise KeyringSecretNotFoundError(f"Secret '{name}' not found in keyring service '{self.service_name}'.")
             try:
                 return json.loads(value)
             except json.JSONDecodeError as e:
-                raise KeyringError(
+                raise KeyringError(  # type: ignore[no-any-return]
                     f"Secret '{name}' in service '{self.service_name}' contains invalid JSON: {e}"
                 ) from e
         except KeyringError:
@@ -69,9 +67,7 @@ class KeyringBackend(BaseSecretBackend):
         try:
             existing = keyring.get_password(self.service_name, name)
             if existing is None:
-                raise KeyringSecretNotFoundError(
-                    f"Secret '{name}' does not exist — use add_secret() first."
-                )
+                raise KeyringSecretNotFoundError(f"Secret '{name}' does not exist — use add_secret() first.")
             keyring.set_password(self.service_name, name, json.dumps(secret))
             self.logger.info(f"Keyring secret updated: {name}", mask=self.mask)
         except KeyringError:
@@ -83,9 +79,7 @@ class KeyringBackend(BaseSecretBackend):
         try:
             existing = keyring.get_password(self.service_name, name)
             if existing is None:
-                raise KeyringSecretNotFoundError(
-                    f"Secret '{name}' not found in keyring service '{self.service_name}'."
-                )
+                raise KeyringSecretNotFoundError(f"Secret '{name}' not found in keyring service '{self.service_name}'.")
             keyring.delete_password(self.service_name, name)
             self.logger.info(f"Keyring secret deleted: {name}")
         except KeyringError:

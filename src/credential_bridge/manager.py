@@ -21,9 +21,7 @@ class SecretsManager:
     def __init__(self, backend: str, **kwargs: Any) -> None:
         if backend not in self._registry:
             available = list(self._registry.keys())
-            raise BackendNotRegisteredError(
-                f"Unknown backend '{backend}'. Available: {available}"
-            )
+            raise BackendNotRegisteredError(f"Unknown backend '{backend}'. Available: {available}")
         self._backend: BaseSecretBackend = self._registry[backend](**kwargs)
 
     @property
