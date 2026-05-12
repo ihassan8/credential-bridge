@@ -27,7 +27,7 @@ jobs:
     needs: [lint, typecheck]
     uses: vertex-ai-automations/shared-workflows/.github/workflows/test.yml@main
     with:
-      python-versions: '["3.8", "3.10", "3.12"]'
+      python-versions: '["3.10", "3.11", "3.12"]'
       os-matrix: '["ubuntu-latest", "windows-latest"]'
       install-command: 'pip install -e ".[dev]"'
       test-command: 'pytest tests/unit/ -v --tb=short'
