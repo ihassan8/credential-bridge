@@ -8,6 +8,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/credential-bridge?color=indigo&logo=pypi&logoColor=white)](https://pypi.org/project/credential-bridge/)
 [![Python versions](https://img.shields.io/pypi/pyversions/credential-bridge?color=indigo&logo=python&logoColor=white)](https://pypi.org/project/credential-bridge/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-indigo.svg)](https://github.com/vertex-ai-automations/credential-bridge/blob/main/LICENSE.txt)
+[![CI](https://img.shields.io/github/actions/workflow/status/vertex-ai-automations/credential-bridge/ci.yml?branch=main&label=CI&logo=github)](https://github.com/vertex-ai-automations/credential-bridge/actions/workflows/ci.yml)
 
 <br/>
 
@@ -253,6 +254,18 @@ mypy src/
 mkdocs serve
 ```
 
+
+### CI Pipeline
+
+Every push to `main` and every pull request runs automatically via [shared-workflows](https://github.com/vertex-ai-automations/shared-workflows):
+
+| Job | What it checks |
+|-----|----------------|
+| **Test** | pytest on Python 3.8 / 3.10 / 3.12 x Ubuntu + Windows (runs after lint and typecheck pass) |
+| **Lint** | `ruff check` + `ruff format --check` |
+| **Type Check** | `mypy src/` |
+| **Audit** | `pip-audit` — all dependencies scanned for known CVEs |
+| **Coverage** | `pytest-cov` — report posted to the Actions job summary |
 ---
 
 ## Contributing
