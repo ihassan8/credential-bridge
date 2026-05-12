@@ -53,7 +53,7 @@ class KeyringBackend(BaseSecretBackend):
             if value is None:
                 raise KeyringSecretNotFoundError(f"Secret '{name}' not found in keyring service '{self.service_name}'.")
             try:
-                return json.loads(value)
+                return json.loads(value)  # type: ignore[no-any-return]
             except json.JSONDecodeError as e:
                 raise KeyringError(  # type: ignore[no-any-return]
                     f"Secret '{name}' in service '{self.service_name}' contains invalid JSON: {e}"

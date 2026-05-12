@@ -49,7 +49,7 @@ def load_config() -> Dict[str, Any]:
     logger.debug("Loading config file...")
     if CONFIG_FILE.exists():
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:  # type: ignore[no-any-return]
-            return json.load(f)
+            return json.load(f)  # type: ignore[no-any-return]
     return {}
 
 

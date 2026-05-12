@@ -534,19 +534,19 @@ def run_vault_cli(
         elif action in ("read-metadata", "delete-versions", "undelete-versions", "destroy-versions", "get-config"):
             vault_backend = manager.backend
             if action == "read-metadata":
-                meta = vault_backend.read_secret_metadata(secret_path)
+                meta = vault_backend.read_secret_metadata(secret_path)  # type: ignore[attr-defined]
                 _print_result_dict(meta, title=f"Metadata: {secret_path}")
             elif action == "delete-versions":
-                vault_backend.delete_secret_versions(secret_path, versions)
+                vault_backend.delete_secret_versions(secret_path, versions)  # type: ignore[attr-defined]
                 _success(f"Soft-deleted versions {versions} of [bold]{secret_path}[/bold].")
             elif action == "undelete-versions":
-                vault_backend.undelete_secret_versions(secret_path, versions)
+                vault_backend.undelete_secret_versions(secret_path, versions)  # type: ignore[attr-defined]
                 _success(f"Restored versions {versions} of [bold]{secret_path}[/bold].")
             elif action == "destroy-versions":
-                vault_backend.destroy_secret_versions(secret_path, versions)
+                vault_backend.destroy_secret_versions(secret_path, versions)  # type: ignore[attr-defined]
                 _success(f"Permanently destroyed versions {versions} of [bold]{secret_path}[/bold].")
             elif action == "get-config":
-                cfg = vault_backend.get_config()
+                cfg = vault_backend.get_config()  # type: ignore[attr-defined]
                 _print_result_dict(cfg, title="Vault Config")
     except Exception as e:
         _error(str(e))

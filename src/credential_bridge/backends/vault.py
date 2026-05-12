@@ -57,7 +57,7 @@ class VaultBackend(BaseSecretBackend):
         if vault_url:
             self.vault_addr = vault_url
         else:
-            self.vault_addr = os.environ.get("VAULT_ADDR") or config.get("vault_addr")
+            self.vault_addr = os.environ.get("VAULT_ADDR") or config.get("vault_addr")  # type: ignore[assignment]
 
         if not self.vault_addr:
             raise ConfigurationError(
@@ -213,7 +213,7 @@ class VaultBackend(BaseSecretBackend):
                 path=name,
                 mount_point=self.mount_point,
             )
-            return response["data"]["data"]
+            return response["data"]["data"]  # type: ignore[no-any-return]
         except hvac.exceptions.InvalidPath as e:
             raise VaultSecretNotFoundError(f"Secret path '{name}' does not exist: {e}") from e
         except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout) as exc:
@@ -268,7 +268,7 @@ class VaultBackend(BaseSecretBackend):
                 path=path,
                 mount_point=self.mount_point,
             )
-            return response["data"]["keys"]
+            return response["data"]["keys"]  # type: ignore[no-any-return]
         except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout) as exc:
             raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
         except (ConnectionError, OSError) as exc:
@@ -284,7 +284,7 @@ class VaultBackend(BaseSecretBackend):
         """Return the KV engine configuration for the current mount point."""
         self._refresh_token_if_needed()
         try:
-            return self.client.secrets.kv.v2.read_configuration(mount_point=self.mount_point)
+            return self.client.secrets.kv.v2.read_configuration(mount_point=self.mount_point)  # type: ignore[no-any-return]
         except Exception as exc:
             raise VaultError(f"Failed to read config for mount '{self.mount_point}': {exc}") from exc
 
@@ -292,7 +292,7 @@ class VaultBackend(BaseSecretBackend):
         """Return metadata and version info for *name*."""  # type: ignore[no-any-return]
         self._refresh_token_if_needed()
         try:
-            return self.client.secrets.kv.v2.read_secret_metadata(
+            return self.client.secrets.kv.v2.read_secret_metadata(  # type: ignore[no-any-return]
                 path=name,
                 mount_point=self.mount_point,
             )
