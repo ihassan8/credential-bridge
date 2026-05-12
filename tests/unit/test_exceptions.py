@@ -65,3 +65,22 @@ def test_vault_secret_not_found_is_vault_error():
     from credential_bridge.exceptions import VaultError, VaultSecretNotFoundError
 
     assert issubclass(VaultSecretNotFoundError, VaultError)
+
+
+def test_keyring_key_exists_error_is_keyring_error():
+    from credential_bridge.exceptions import KeyringError, KeyringKeyExistsError
+
+    assert issubclass(KeyringKeyExistsError, KeyringError)
+
+
+def test_keyring_key_exists_error_is_catchable_as_backend_error():
+    from credential_bridge.exceptions import BackendError, KeyringKeyExistsError
+
+    with pytest.raises(BackendError):
+        raise KeyringKeyExistsError("already exists")
+
+
+def test_keyring_key_exists_error_exported_from_package():
+    from credential_bridge import KeyringKeyExistsError
+
+    assert KeyringKeyExistsError is not None

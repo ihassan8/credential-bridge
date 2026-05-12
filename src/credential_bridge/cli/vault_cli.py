@@ -59,7 +59,11 @@ def add(
         print_error("At least one KEY=value pair is required.", title="Missing Input")
         raise typer.Exit(1)
     backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
-    secret_dict = parse_secrets(secret)
+    try:
+        secret_dict = parse_secrets(secret)
+    except ValueError as e:
+        print_error(str(e), title="Bad Input")
+        raise typer.Exit(1)
     try:
         backend.add_secret(name, secret_dict)
         print_success(f"Secret [bold]{name}[/bold] added.")
@@ -113,7 +117,11 @@ def update(
         print_error("At least one KEY=value pair is required.", title="Missing Input")
         raise typer.Exit(1)
     backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
-    secret_dict = parse_secrets(secret)
+    try:
+        secret_dict = parse_secrets(secret)
+    except ValueError as e:
+        print_error(str(e), title="Bad Input")
+        raise typer.Exit(1)
     try:
         backend.update_secret(name, secret_dict)
         print_success(f"Secret [bold]{name}[/bold] updated.")

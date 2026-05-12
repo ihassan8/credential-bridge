@@ -1,4 +1,5 @@
 # src/credential_bridge/prompt_wizard.py
+import os
 import sys
 from typing import Optional
 
@@ -17,6 +18,7 @@ from rich.text import Text
 # shared Rich helpers so we don't duplicate them here.
 from .cli._output import print_result as _print_result_dict
 from .cli._output import print_table as _print_result_list
+from .exceptions import CredentialBridgeError
 from .utils import get_vault_credentials, load_config, load_welcome_banner, save_config
 
 # ── Rich console ──────────────────────────────────────────────────────────────
@@ -105,8 +107,6 @@ def _menu_prompt(text: str, completer=None) -> str:
 
 def is_vault_cred_valid(vault_token=None, role_id=None, secret_id=None) -> bool:
     """Validate Vault credentials by attempting authentication through VaultBackend."""
-    import os
-
     vault_addr = os.environ.get("VAULT_ADDR") or load_config().get("vault_addr")
     if not vault_addr:
         _error("No Vault address configured. Set VAULT_ADDR or save it via the wizard.")
@@ -296,8 +296,6 @@ def configure_vault() -> None:
 
 
 def _save_vault_token(token: str) -> None:
-    import os
-
     cfg = load_config()
     cfg.update(
         {
@@ -311,8 +309,6 @@ def _save_vault_token(token: str) -> None:
 
 
 def _save_vault_approle(role_id: str, secret_id: str) -> None:
-    import os
-
     cfg = load_config()
     cfg.update(
         {
@@ -462,8 +458,10 @@ def configure_env() -> None:
                 backend.delete_secret(name)
                 _success(f"Deleted [bold]{name}[/bold] from {env_path}.")
 
-        except Exception as e:
+        except CredentialBridgeError as e:
             _error(str(e))
+        except Exception as e:
+            _error(f"Unexpected error: {e}")
 
         console.print()
 
@@ -488,8 +486,10 @@ def run_keyring_cli(action: str, service_name: str, name: str, secret: Optional[
         elif action == "delete":
             manager.delete_secret(name)
             _success(f"Deleted [bold]{name}[/bold] from keyring service '{service_name}'.")
-    except Exception as e:
+    except CredentialBridgeError as e:
         _error(str(e))
+    except Exception as e:
+        _error(f"Unexpected error: {e}")
 
 
 def run_vault_cli(
@@ -502,8 +502,6 @@ def run_vault_cli(
     vault_role_id=None,
     vault_secret_id=None,
 ) -> None:
-    import os
-
     from .manager import SecretsManager
 
     vault_url = os.environ.get("VAULT_ADDR") or load_config().get("vault_addr")
@@ -548,8 +546,10 @@ def run_vault_cli(
             elif action == "get-config":
                 cfg = vault_backend.get_config()  # type: ignore[attr-defined]
                 _print_result_dict(cfg, title="Vault Config")
-    except Exception as e:
+    except CredentialBridgeError as e:
         _error(str(e))
+    except Exception as e:
+        _error(f"Unexpected error: {e}")
 
 
 if __name__ == "__main__":

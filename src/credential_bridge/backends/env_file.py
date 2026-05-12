@@ -197,5 +197,11 @@ class EnvFileBackend(BaseSecretBackend):
 
         raise EnvFileNotFoundError(f"Key or group '{name}' not found in {self.path}.")
 
+    def __repr__(self) -> str:
+        return f"EnvFileBackend(path={str(self.path)!r})"
+
     def list_secrets(self, path: str = "") -> List[str]:
-        return list(self._current_keys().keys())
+        keys = list(self._current_keys().keys())
+        if path:
+            keys = [k for k in keys if k.startswith(path)]
+        return keys

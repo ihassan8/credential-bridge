@@ -46,3 +46,17 @@ def test_custom_path_passed_to_backend(mocker):
     backend.list_secrets.return_value = []
     runner.invoke(app, ["list", "--path", "/custom/.env"])
     mock_cls.assert_called_once_with(path="/custom/.env")
+
+
+def test_add_command_malformed_secret_exits_with_error(mock_env_backend):
+    """A --secret value without '=' should exit 1 and show an error."""
+    result = runner.invoke(app, ["add", "GROUP", "--secret", "NOEQUALSSIGN"])
+    assert result.exit_code == 1
+    assert "NOEQUALSSIGN" in result.output
+    mock_env_backend.add_secret.assert_not_called()
+
+
+def test_update_command_malformed_secret_exits_with_error(mock_env_backend):
+    result = runner.invoke(app, ["update", "MY_KEY", "--secret", "BADFORMAT"])
+    assert result.exit_code == 1
+    mock_env_backend.update_secret.assert_not_called()

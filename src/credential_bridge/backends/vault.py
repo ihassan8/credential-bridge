@@ -2,7 +2,8 @@
 
 import getpass
 import os
-from typing import Any, Dict, List, Optional, Union
+from contextlib import contextmanager
+from typing import Any, Dict, Generator, List, Optional, Union
 
 import hvac
 import requests
@@ -62,7 +63,7 @@ class VaultBackend(BaseSecretBackend):
         if not self.vault_addr:
             raise ConfigurationError(
                 "Vault address must be provided via the vault_url argument, "
-                "the VAULT_ADDR environment variable, or ~/.vault_config.json"  # type: ignore[assignment]
+                "the VAULT_ADDR environment variable, or ~/.vault_config.json"
             )
 
         self.mask = mask
@@ -185,96 +186,81 @@ class VaultBackend(BaseSecretBackend):
             self.logger.warning("Token refresh check failed (will retry on next operation): %s", e)
 
     # ------------------------------------------------------------------
+    # Exception mapping context manager
+    # ------------------------------------------------------------------
+
+    @contextmanager
+    def _vault_call(self, operation: str, name: str = "") -> Generator[None, None, None]:
+        """Map common Vault / network exceptions to credential-bridge exceptions."""
+        try:
+            yield
+        except (VaultAuthError, VaultConnectionError, VaultSecretNotFoundError, VaultError):
+            raise
+        except hvac.exceptions.InvalidPath as exc:
+            path_desc = f"Secret path '{name}' does not exist" if name else "Secret path not found"
+            raise VaultSecretNotFoundError(f"{path_desc}: {exc}") from exc
+        except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout) as exc:
+            raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
+        except (ConnectionError, OSError) as exc:
+            raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
+        except Exception as exc:
+            raise VaultError(f"{operation}: {exc}") from exc
+
+    # ------------------------------------------------------------------
     # BaseSecretBackend interface
     # ------------------------------------------------------------------
 
     def add_secret(self, name: str, secret: Dict[str, Any]) -> None:
         """Add or update a secret in Vault (creates a new KV-v2 version)."""
         self._refresh_token_if_needed()
-        try:
+        with self._vault_call(f"Failed to add secret '{name}'", name=name):
             self.client.secrets.kv.v2.create_or_update_secret(
                 path=name,
                 secret=secret,
                 mount_point=self.mount_point,
             )
-            self.logger.info(f"Secret added: {name}")
-        except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout) as exc:
-            raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
-        except (ConnectionError, OSError) as exc:
-            raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
-        except Exception as exc:
-            raise VaultError(f"Failed to add secret '{name}': {exc}") from exc
+        self.logger.info(f"Secret added: {name}")
 
     def get_secret(self, name: str) -> Dict[str, Any]:
         """Retrieve a secret by *name*."""
         self._refresh_token_if_needed()
-        try:
+        with self._vault_call(f"Failed to get secret '{name}'", name=name):
             response = self.client.secrets.kv.v2.read_secret(
                 path=name,
                 mount_point=self.mount_point,
             )
-            return response["data"]["data"]  # type: ignore[no-any-return]
-        except hvac.exceptions.InvalidPath as e:
-            raise VaultSecretNotFoundError(f"Secret path '{name}' does not exist: {e}") from e
-        except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout) as exc:
-            raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
-        except (ConnectionError, OSError) as exc:
-            raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
-        except Exception as exc:
-            raise VaultError(f"Failed to get secret '{name}': {exc}") from exc
+        return response["data"]["data"]  # type: ignore[no-any-return]
 
     def update_secret(self, name: str, secret: Dict[str, Any]) -> None:
         """Update an existing secret."""
         self._refresh_token_if_needed()
-        try:
+        with self._vault_call(f"Failed to update secret '{name}'", name=name):
             self.client.secrets.kv.v2.patch(
                 path=name,
                 secret=secret,
                 mount_point=self.mount_point,
             )
-            self.logger.info(f"Secret updated: {name}")
-        except hvac.exceptions.InvalidPath as e:
-            raise VaultSecretNotFoundError(f"Secret path '{name}' does not exist: {e}") from e  # type: ignore[no-any-return]
-        except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout) as exc:
-            raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
-        except (ConnectionError, OSError) as exc:
-            raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
-        except Exception as exc:
-            raise VaultError(f"Failed to update secret '{name}': {exc}") from exc
+        self.logger.info(f"Secret updated: {name}")
 
     def delete_secret(self, name: str) -> None:
         """Permanently delete a secret and all its versions."""
         self._refresh_token_if_needed()
-        try:
+        with self._vault_call(f"Failed to delete secret '{name}'", name=name):
             self.client.secrets.kv.v2.delete_metadata_and_all_versions(
                 path=name,
                 mount_point=self.mount_point,
             )
-            self.logger.info(f"Secret deleted: {name}")
-        except hvac.exceptions.InvalidPath as e:
-            raise VaultSecretNotFoundError(f"Secret path '{name}' does not exist: {e}") from e
-        except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout) as exc:
-            raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
-        except (ConnectionError, OSError) as exc:
-            raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
-        except Exception as exc:
-            raise VaultError(f"Failed to delete secret '{name}': {exc}") from exc
+        self.logger.info(f"Secret deleted: {name}")
 
     def list_secrets(self, path: str = "") -> List[str]:
         """List secret keys under *path*."""
         self._refresh_token_if_needed()
-        try:
+        with self._vault_call(f"Failed to list secrets at '{path}'"):
             response = self.client.secrets.kv.v2.list_secrets(
                 path=path,
                 mount_point=self.mount_point,
             )
-            return response["data"]["keys"]  # type: ignore[no-any-return]
-        except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout) as exc:
-            raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
-        except (ConnectionError, OSError) as exc:
-            raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {exc}") from exc
-        except Exception as exc:
-            raise VaultError(f"Failed to list secrets at '{path}': {exc}") from exc
+        return response["data"]["keys"]  # type: ignore[no-any-return]
 
     # ------------------------------------------------------------------
     # Extra helpers
@@ -283,57 +269,47 @@ class VaultBackend(BaseSecretBackend):
     def get_config(self) -> Optional[Dict[str, Any]]:
         """Return the KV engine configuration for the current mount point."""
         self._refresh_token_if_needed()
-        try:
+        with self._vault_call(f"Failed to read config for mount '{self.mount_point}'"):
             return self.client.secrets.kv.v2.read_configuration(mount_point=self.mount_point)  # type: ignore[no-any-return]
-        except Exception as exc:
-            raise VaultError(f"Failed to read config for mount '{self.mount_point}': {exc}") from exc
 
     def read_secret_metadata(self, name: str) -> Optional[Dict[str, Any]]:
-        """Return metadata and version info for *name*."""  # type: ignore[no-any-return]
+        """Return metadata and version info for *name*."""
         self._refresh_token_if_needed()
-        try:
+        with self._vault_call(f"Failed to read metadata for '{name}'", name=name):
             return self.client.secrets.kv.v2.read_secret_metadata(  # type: ignore[no-any-return]
                 path=name,
                 mount_point=self.mount_point,
             )
-        except Exception as exc:
-            raise VaultError(f"Failed to read metadata for '{name}': {exc}") from exc
 
     def delete_secret_versions(self, name: str, versions: List[int]) -> None:
         """Soft-delete specific versions of *name*."""
         self._refresh_token_if_needed()
-        try:
+        with self._vault_call(f"Failed to delete versions {versions} of '{name}'"):
             self.client.secrets.kv.v2.delete_secret_versions(
                 path=name,
-                versions=versions,  # type: ignore[no-any-return]
+                versions=versions,
                 mount_point=self.mount_point,
             )
-            self.logger.info(f"Soft-deleted versions {versions} of '{name}'.")
-        except Exception as exc:
-            raise VaultError(f"Failed to delete versions {versions} of '{name}': {exc}") from exc
+        self.logger.info(f"Soft-deleted versions {versions} of '{name}'.")
 
     def undelete_secret_versions(self, name: str, versions: List[int]) -> None:
         """Restore soft-deleted versions of *name*."""
         self._refresh_token_if_needed()
-        try:
+        with self._vault_call(f"Failed to undelete versions {versions} of '{name}'"):
             self.client.secrets.kv.v2.undelete_secret_versions(
-                path=name,  # type: ignore[no-any-return]
+                path=name,
                 versions=versions,
                 mount_point=self.mount_point,
             )
-            self.logger.info(f"Undeleted versions {versions} of '{name}'.")
-        except Exception as exc:
-            raise VaultError(f"Failed to undelete versions {versions} of '{name}': {exc}") from exc
+        self.logger.info(f"Undeleted versions {versions} of '{name}'.")
 
     def destroy_secret_versions(self, name: str, versions: List[int]) -> None:
         """Permanently destroy specific versions of *name*."""
         self._refresh_token_if_needed()
-        try:
+        with self._vault_call(f"Failed to destroy versions {versions} of '{name}'"):
             self.client.secrets.kv.v2.destroy_secret_versions(
                 path=name,
                 versions=versions,
                 mount_point=self.mount_point,
             )
-            self.logger.info(f"Destroyed versions {versions} of '{name}'.")
-        except Exception as exc:
-            raise VaultError(f"Failed to destroy versions {versions} of '{name}': {exc}") from exc
+        self.logger.info(f"Destroyed versions {versions} of '{name}'.")

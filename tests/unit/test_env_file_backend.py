@@ -208,3 +208,28 @@ def test_load_into_environ_on_delete(tmp_path, monkeypatch):
     backend = EnvFileBackend(path=env_file, load_into_environ=True)
     backend.delete_secret("MY_VAR")
     assert os.environ.get("MY_VAR") is None
+
+
+def test_repr(tmp_path):
+    env_file = tmp_path / ".env"
+    backend = EnvFileBackend(path=env_file)
+    r = repr(backend)
+    assert r.startswith("EnvFileBackend(path=")
+    assert ".env" in r
+
+
+def test_list_secrets_with_path_filter(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("APP_HOST=localhost\nAPP_PORT=5432\nDB_NAME=mydb\n", encoding="utf-8")
+    backend = EnvFileBackend(path=env_file)
+    assert set(backend.list_secrets("APP_")) == {"APP_HOST", "APP_PORT"}
+    assert backend.list_secrets("DB_") == ["DB_NAME"]
+    assert backend.list_secrets("MISSING_") == []
+
+
+def test_list_secrets_no_filter_returns_all(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("FOO=1\nBAR=2\n", encoding="utf-8")
+    backend = EnvFileBackend(path=env_file)
+    assert set(backend.list_secrets()) == {"FOO", "BAR"}
+    assert set(backend.list_secrets("")) == {"FOO", "BAR"}

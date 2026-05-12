@@ -26,7 +26,11 @@ def add(
         print_error("At least one KEY=value pair is required.", title="Missing Input")
         raise typer.Exit(1)
     backend = KeyringBackend(service_name=service_name)
-    secret_dict = parse_secrets(secret)
+    try:
+        secret_dict = parse_secrets(secret)
+    except ValueError as e:
+        print_error(str(e), title="Bad Input")
+        raise typer.Exit(1)
     try:
         backend.add_secret(name, secret_dict)
         print_success(f"Secret [bold]{name}[/bold] added.")
@@ -67,7 +71,11 @@ def update(
         print_error("At least one KEY=value pair is required.", title="Missing Input")
         raise typer.Exit(1)
     backend = KeyringBackend(service_name=service_name)
-    secret_dict = parse_secrets(secret)
+    try:
+        secret_dict = parse_secrets(secret)
+    except ValueError as e:
+        print_error(str(e), title="Bad Input")
+        raise typer.Exit(1)
     try:
         backend.update_secret(name, secret_dict)
         print_success(f"Secret [bold]{name}[/bold] updated.")

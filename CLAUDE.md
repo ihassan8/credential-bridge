@@ -77,6 +77,8 @@ src/credential_bridge/
 - `KeyringBackend.list_secrets()` always raises `KeyringError`; Windows Credential Manager and macOS Keychain don't expose enumeration APIs.
 - `EnvFileBackend.add_secret(name, {...})` writes a `# name` comment block above the key-value pairs. `get_secret(name)` resolves either a single key or all keys under a matching comment block.
 - `EnvFileBackend(load_into_environ=True)` syncs written/updated values into `os.environ` immediately.
+- `add_secret` idempotency varies: `VaultBackend` overwrites (creates new KV-v2 version); `KeyringBackend` raises `KeyringError`; `EnvFileBackend` raises `EnvFileKeyExistsError`. Do not assume idempotency via `SecretsManager`.
+- `update_secret` merge vs replace: `VaultBackend` merges supplied keys (other keys preserved); `KeyringBackend` replaces the entire stored dict; `EnvFileBackend` replaces each supplied key in-place and raises `EnvFileNotFoundError` if any key is missing.
 - `VaultBackend` exposes version-management helpers beyond the abstract interface: `delete_secret_versions`, `undelete_secret_versions`, `destroy_secret_versions`, and `read_secret_metadata`.
 - On Windows, `save_config()` cannot set file permissions to 0o600 and issues a `UserWarning` instead; `cli/_output.py` reconfigures stdout/stderr to UTF-8 to handle Rich's box-drawing characters.
 
@@ -86,13 +88,15 @@ src/credential_bridge/
 CredentialBridgeError
 ├── BackendError
 │   ├── VaultError
-│   │   ├── VaultAuthError          — bad token / AppRole
-│   │   ├── VaultConnectionError    — unreachable server
-│   │   └── VaultSecretNotFoundError — secret path does not exist
+│   │   ├── VaultAuthError              — bad token / AppRole
+│   │   ├── VaultConnectionError        — unreachable server
+│   │   └── VaultSecretNotFoundError    — secret path does not exist
 │   ├── KeyringError
+│   │   ├── KeyringSecretNotFoundError  — secret does not exist in keyring
+│   │   └── KeyringKeyExistsError       — add_secret on existing key
 │   └── EnvFileError
-│       ├── EnvFileNotFoundError    — key not found
-│       └── EnvFileKeyExistsError   — add_secret on existing key
+│       ├── EnvFileNotFoundError        — key not found
+│       └── EnvFileKeyExistsError       — add_secret on existing key
 ├── BackendNotRegisteredError
 └── ConfigurationError
 ```

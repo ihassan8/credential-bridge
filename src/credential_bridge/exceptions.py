@@ -33,6 +33,10 @@ class KeyringSecretNotFoundError(KeyringError):
     """A requested secret does not exist in the keyring."""
 
 
+class KeyringKeyExistsError(KeyringError):
+    """A key being added already exists in the keyring."""
+
+
 class EnvFileError(BackendError):
     """Error reading or writing a .env file."""
 

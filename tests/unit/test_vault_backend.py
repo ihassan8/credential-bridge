@@ -323,3 +323,50 @@ def test_get_config(mock_hvac):
     result = backend.get_config()
     mock_hvac.secrets.kv.v2.read_configuration.assert_called_once_with(mount_point=backend.mount_point)
     assert result == {"data": {"max_versions": 10}}
+
+
+# ---------------------------------------------------------------------------
+# 2h: _vault_call context manager
+# ---------------------------------------------------------------------------
+
+
+def test_vault_call_maps_invalid_path_to_not_found(mock_hvac):
+    """InvalidPath raised inside _vault_call surfaces as VaultSecretNotFoundError."""
+    import hvac.exceptions
+
+    from credential_bridge.exceptions import VaultSecretNotFoundError
+
+    mock_hvac.secrets.kv.v2.read_secret.side_effect = hvac.exceptions.InvalidPath("gone")
+    backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
+    with pytest.raises(VaultSecretNotFoundError, match="does not exist"):
+        backend.get_secret("myapp/gone")
+
+
+def test_vault_call_maps_os_error_to_connection_error(mock_hvac):
+    """OSError inside _vault_call surfaces as VaultConnectionError."""
+    from credential_bridge.exceptions import VaultConnectionError
+
+    mock_hvac.secrets.kv.v2.create_or_update_secret.side_effect = OSError("network down")
+    backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
+    with pytest.raises(VaultConnectionError, match="Cannot reach Vault"):
+        backend.add_secret("myapp/db", {"k": "v"})
+
+
+def test_vault_call_maps_generic_exception_to_vault_error(mock_hvac):
+    """Unexpected exceptions inside _vault_call surface as VaultError."""
+    from credential_bridge.exceptions import VaultError
+
+    mock_hvac.secrets.kv.v2.list_secrets.side_effect = RuntimeError("unexpected")
+    backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
+    with pytest.raises(VaultError, match="Failed to list secrets"):
+        backend.list_secrets()
+
+
+def test_vault_call_does_not_rewrap_vault_errors(mock_hvac):
+    """VaultError subclasses already raised pass through _vault_call unchanged."""
+    from credential_bridge.exceptions import VaultSecretNotFoundError
+
+    mock_hvac.secrets.kv.v2.read_secret.side_effect = VaultSecretNotFoundError("already mapped")
+    backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
+    with pytest.raises(VaultSecretNotFoundError, match="already mapped"):
+        backend.get_secret("myapp/db")

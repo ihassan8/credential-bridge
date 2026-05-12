@@ -5,7 +5,6 @@ import json
 import sys
 from typing import Any, Dict, List
 
-import typer
 from prompt_toolkit import prompt as pt_prompt
 from prompt_toolkit.styles import Style as PtStyle
 from rich.console import Console
@@ -59,12 +58,11 @@ def print_table(rows: List[str], title: str = "", column: str = "Key") -> None:
 
 
 def parse_secrets(pairs: List[str]) -> dict:
-    """Convert KEY=value strings to a dict, raising a clean error on malformed input."""
+    """Convert KEY=value strings to a dict. Raises ValueError on malformed input."""
     result = {}
     for s in pairs:
         if "=" not in s:
-            print_error(f"Invalid secret format '{s}' — expected KEY=value.", title="Bad Input")
-            raise typer.Exit(1)
+            raise ValueError(f"Invalid secret format '{s}' — expected KEY=value.")
         k, v = s.split("=", 1)
         result[k] = v
     return result

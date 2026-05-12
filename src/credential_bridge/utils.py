@@ -48,7 +48,7 @@ def load_config() -> Dict[str, Any]:
     """Load configuration data from CONFIG_FILE. Returns empty dict if file doesn't exist."""
     logger.debug("Loading config file...")
     if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:  # type: ignore[no-any-return]
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             return json.load(f)  # type: ignore[no-any-return]
     return {}
 

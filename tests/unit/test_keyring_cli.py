@@ -38,3 +38,17 @@ def test_update_command(mock_keyring_backend):
     result = runner.invoke(app, ["update", "mykey", "--secret", "mykey=new", "--service-name", "svc"])
     assert result.exit_code == 0
     mock_keyring_backend.update_secret.assert_called_once()
+
+
+def test_add_command_malformed_secret_exits_with_error(mock_keyring_backend):
+    """A --secret value without '=' should exit 1 and show an error."""
+    result = runner.invoke(app, ["add", "mykey", "--secret", "NOEQUALSSIGN", "--service-name", "svc"])
+    assert result.exit_code == 1
+    assert "NOEQUALSSIGN" in result.output
+    mock_keyring_backend.add_secret.assert_not_called()
+
+
+def test_update_command_malformed_secret_exits_with_error(mock_keyring_backend):
+    result = runner.invoke(app, ["update", "mykey", "--secret", "BADFORMAT", "--service-name", "svc"])
+    assert result.exit_code == 1
+    mock_keyring_backend.update_secret.assert_not_called()

@@ -7,7 +7,7 @@ import keyring
 from keyring.errors import KeyringError as _KeyringLibError
 from pylogshield import LogLevel, PyLogShield, get_logger
 
-from ..exceptions import ConfigurationError, KeyringError, KeyringSecretNotFoundError
+from ..exceptions import ConfigurationError, KeyringError, KeyringKeyExistsError, KeyringSecretNotFoundError
 from .base import BaseSecretBackend
 
 
@@ -36,7 +36,7 @@ class KeyringBackend(BaseSecretBackend):
         try:
             existing = keyring.get_password(self.service_name, name)
             if existing is not None:
-                raise KeyringError(
+                raise KeyringKeyExistsError(
                     f"Secret '{name}' already exists in keyring service '{self.service_name}'. "
                     "Use update_secret() to change it."
                 )
