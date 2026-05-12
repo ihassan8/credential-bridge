@@ -1,54 +1,46 @@
-name: 🧪 CI
+name: CI
 
 on:
   push:
     branches: [main]
+    tags-ignore: ["*.*.*"]
   pull_request:
     branches: [main]
 
 jobs:
 
-  # ── Lint (runs once, not per-platform) ──────────────────────────────────────
   lint:
-    name: 🔍 Lint & type-check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    name: Lint
+    uses: vertex-ai-automations/shared-workflows/.github/workflows/lint.yml@main
+    with:
+      lint-args: 'src/'
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+  typecheck:
+    name: Type Check
+    uses: vertex-ai-automations/shared-workflows/.github/workflows/typecheck.yml@main
+    with:
+      install-command: 'pip install -e ".[dev]"'
 
-      - name: Install dev dependencies
-        run: pip install -e ".[dev]"
-
-      - name: Ruff lint
-        run: ruff check src/
-
-      - name: Mypy type-check
-        run: mypy src/
-
-  # ── Unit tests (Linux × Windows, Python 3.8 / 3.10 / 3.12) ─────────────────
   test:
-    name: 🧪 Python ${{ matrix.python-version }} / ${{ matrix.os }}
-    needs: lint
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        python-version: ["3.8", "3.10", "3.12"]
+    name: Test
+    needs: [lint, typecheck]
+    uses: vertex-ai-automations/shared-workflows/.github/workflows/test.yml@main
+    with:
+      python-versions: '["3.8", "3.10", "3.12"]'
+      os-matrix: '["ubuntu-latest", "windows-latest"]'
+      install-command: 'pip install -e ".[dev]"'
+      test-command: 'pytest tests/unit/ -v --tb=short'
 
-    steps:
-      - uses: actions/checkout@v4
+  audit:
+    name: Audit
+    uses: vertex-ai-automations/shared-workflows/.github/workflows/audit.yml@main
+    with:
+      install-command: 'pip install -e ".[dev]"'
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install package and dev dependencies
-        run: pip install -e ".[dev]"
-
-      - name: Run unit tests
-        run: pytest tests/unit/ -v --tb=short
+  coverage:
+    name: Coverage
+    uses: vertex-ai-automations/shared-workflows/.github/workflows/coverage.yml@main
+    with:
+      install-command: 'pip install -e ".[dev]"'
+      test-command: 'pytest tests/unit/'
+      coverage-source: 'src/'
