@@ -1,10 +1,10 @@
 # tests/unit/test_vault_backend.py
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
+
 from credential_bridge.backends.vault import VaultBackend
-from credential_bridge.exceptions import (
-    ConfigurationError, VaultAuthError, VaultError
-)
+from credential_bridge.exceptions import ConfigurationError, VaultAuthError
 
 
 @pytest.fixture
@@ -75,9 +75,7 @@ def test_add_secret(mock_hvac):
 
 
 def test_get_secret(mock_hvac):
-    mock_hvac.secrets.kv.v2.read_secret.return_value = {
-        "data": {"data": {"user": "admin"}}
-    }
+    mock_hvac.secrets.kv.v2.read_secret.return_value = {"data": {"data": {"user": "admin"}}}
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
     result = backend.get_secret("myapp/db")
     assert result == {"user": "admin"}
@@ -95,15 +93,17 @@ def test_backend_name():
 
 def test_mount_point_default(mock_hvac):
     import getpass
+
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
     assert backend.mount_point == getpass.getuser()
 
 
 def test_list_secrets_empty_path(mock_hvac):
     import getpass
+
     mock_hvac.secrets.kv.v2.list_secrets.return_value = {"data": {"keys": ["a", "b"]}}
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
-    result = backend.list_secrets()
+    _result = backend.list_secrets()
     mock_hvac.secrets.kv.v2.list_secrets.assert_called_once_with(path="", mount_point=getpass.getuser())
 
 
@@ -111,13 +111,12 @@ def test_list_secrets_empty_path(mock_hvac):
 # 2a: AppRole authentication
 # ---------------------------------------------------------------------------
 
+
 def test_approle_authentication_success(mocker):
     """AppRole auth path — different from token path."""
     client = MagicMock()
     client.is_authenticated.return_value = True
-    client.auth.approle.login.return_value = {
-        "auth": {"client_token": "s.approle-token"}
-    }
+    client.auth.approle.login.return_value = {"auth": {"client_token": "s.approle-token"}}
     client.auth.token.lookup_self.return_value = {"data": {"ttl": 3600}}
     mocker.patch("credential_bridge.backends.vault.hvac.Client", return_value=client)
     mocker.patch("credential_bridge.backends.vault.load_config", return_value={})
@@ -129,15 +128,13 @@ def test_approle_authentication_success(mocker):
         vault_secret_id="my-secret-id",
     )
     assert backend.client.token == "s.approle-token"
-    client.auth.approle.login.assert_called_once_with(
-        role_id="my-role-id", secret_id="my-secret-id"
-    )
+    client.auth.approle.login.assert_called_once_with(role_id="my-role-id", secret_id="my-secret-id")
 
 
 def test_approle_auth_error_on_bad_credentials(mocker):
     """AppRole returns no auth token → VaultAuthError."""
     client = MagicMock()
-    client.auth.approle.login.return_value = {}   # no "auth" key
+    client.auth.approle.login.return_value = {}  # no "auth" key
     mocker.patch("credential_bridge.backends.vault.hvac.Client", return_value=client)
     mocker.patch("credential_bridge.backends.vault.load_config", return_value={})
     mocker.patch("credential_bridge.backends.vault.save_config")
@@ -154,8 +151,10 @@ def test_approle_auth_error_on_bad_credentials(mocker):
 # 2b: update_secret
 # ---------------------------------------------------------------------------
 
+
 def test_update_secret(mock_hvac):
     import getpass
+
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
     backend.update_secret("myapp/db", {"pass": "newpass"})
     mock_hvac.secrets.kv.v2.patch.assert_called_once_with(
@@ -168,6 +167,7 @@ def test_update_secret(mock_hvac):
 # ---------------------------------------------------------------------------
 # 2c: token refresh
 # ---------------------------------------------------------------------------
+
 
 def test_refresh_token_renews_when_ttl_low(mock_hvac):
     """Token with TTL < 300 should be renewed."""
@@ -197,6 +197,7 @@ def test_refresh_token_swallows_exception(mock_hvac):
 # 2d: persist parameter
 # ---------------------------------------------------------------------------
 
+
 def test_credentials_not_persisted_by_default(mocker):
     """With persist=False (default), save_config should not be called."""
     client = MagicMock()
@@ -225,10 +226,13 @@ def test_credentials_persisted_when_persist_true(mocker):
 # 2e: VaultSecretNotFoundError
 # ---------------------------------------------------------------------------
 
+
 def test_get_secret_raises_vault_secret_not_found(mock_hvac):
     """InvalidPath from hvac should raise VaultSecretNotFoundError."""
     import hvac.exceptions
+
     from credential_bridge.exceptions import VaultSecretNotFoundError
+
     mock_hvac.secrets.kv.v2.read_secret.side_effect = hvac.exceptions.InvalidPath("secret/myapp/missing")
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
     with pytest.raises(VaultSecretNotFoundError, match="does not exist"):
@@ -238,7 +242,9 @@ def test_get_secret_raises_vault_secret_not_found(mock_hvac):
 def test_delete_secret_raises_vault_secret_not_found(mock_hvac):
     """InvalidPath from hvac on delete should raise VaultSecretNotFoundError."""
     import hvac.exceptions
+
     from credential_bridge.exceptions import VaultSecretNotFoundError
+
     mock_hvac.secrets.kv.v2.delete_metadata_and_all_versions.side_effect = hvac.exceptions.InvalidPath()
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
     with pytest.raises(VaultSecretNotFoundError):
@@ -249,9 +255,12 @@ def test_delete_secret_raises_vault_secret_not_found(mock_hvac):
 # 2f: connection errors surfaced from CRUD methods
 # ---------------------------------------------------------------------------
 
+
 def test_add_secret_raises_vault_connection_error_on_network_failure(mock_hvac):
     import requests as _requests
+
     from credential_bridge.exceptions import VaultConnectionError
+
     mock_hvac.secrets.kv.v2.create_or_update_secret.side_effect = _requests.ConnectionError("unreachable")
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
     with pytest.raises(VaultConnectionError):
@@ -260,7 +269,9 @@ def test_add_secret_raises_vault_connection_error_on_network_failure(mock_hvac):
 
 def test_get_secret_raises_vault_connection_error_on_timeout(mock_hvac):
     import requests as _requests
+
     from credential_bridge.exceptions import VaultConnectionError
+
     mock_hvac.secrets.kv.v2.read_secret.side_effect = _requests.Timeout("timed out")
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
     with pytest.raises(VaultConnectionError):
@@ -270,6 +281,7 @@ def test_get_secret_raises_vault_connection_error_on_timeout(mock_hvac):
 # ---------------------------------------------------------------------------
 # 2g: version-management helpers
 # ---------------------------------------------------------------------------
+
 
 def test_read_secret_metadata(mock_hvac):
     mock_hvac.secrets.kv.v2.read_secret_metadata.return_value = {"data": {"versions": {}}}
