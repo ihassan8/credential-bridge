@@ -1,5 +1,6 @@
 # src/credential_bridge/backends/env_file.py
 import os
+import sys
 from io import StringIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -50,7 +51,15 @@ class EnvFileBackend(BaseSecretBackend):
     def _write_lines(self, lines: List[str]) -> None:
         tmp = self.path.parent / (self.path.name + ".tmp")
         try:
-            tmp.write_text("".join(lines), encoding=self.encoding)
+            content = "".join(lines).encode(self.encoding)
+            if sys.platform == "win32":
+                tmp.write_bytes(content)
+            else:
+                fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                try:
+                    os.write(fd, content)
+                finally:
+                    os.close(fd)
             os.replace(str(tmp), str(self.path))
         except Exception as exc:
             tmp.unlink(missing_ok=True)
@@ -86,13 +95,17 @@ class EnvFileBackend(BaseSecretBackend):
             os.environ[k] = str(v)
 
     def add_secret(self, name: str, secret: Dict[str, Any]) -> None:
-        existing = self._current_keys()
+        lines = self._read_lines()
+        existing = self._parse_lines(lines)
         conflicts = [k for k in secret if k in existing]
         if conflicts:
             raise EnvFileKeyExistsError(
                 f"Key(s) already exist in {self.path}: {conflicts}. Use update_secret() to change them."
             )
-        lines = self._read_lines()
+        if any(line.strip() == f"# {name}" for line in lines):
+            raise EnvFileKeyExistsError(
+                f"Group '{name}' already exists in {self.path}. Use update_secret() to modify its keys."
+            )
         lines.append(f"\n# {name}\n")
         for k, v in secret.items():
             lines.append(f"{k}={_quote_value(str(v))}\n")
@@ -147,13 +160,17 @@ class EnvFileBackend(BaseSecretBackend):
             to_remove: set = set()
             if key_idx is not None:
                 to_remove.add(key_idx)
-                # Walk backwards (skipping blank lines) to find a preceding group-header comment
+                # Walk backwards (skipping blank lines) to find a preceding group-header comment.
+                # Only treat the comment as a group header if it is preceded by a blank line —
+                # add_secret always writes "\n# name\n", so legitimate group headers always
+                # have a blank separator before them. Top-of-file or inline comments that lack
+                # this blank line are left untouched.
                 comment_idx = None
                 for i in range(key_idx - 1, -1, -1):
                     s = lines[i].strip()
                     if not s:
                         continue
-                    if s.startswith("#"):
+                    if s.startswith("#") and i > 0 and not lines[i - 1].strip():
                         comment_idx = i
                     break
                 if comment_idx is not None:

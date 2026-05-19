@@ -21,7 +21,7 @@ def add(
 ):
     """Add a secret to the .env file."""
     if not secret:
-        secret = prompt_secrets_interactive(mask_value=False)
+        secret = prompt_secrets_interactive()
     if not secret:
         print_error("At least one KEY=value pair is required.", title="Missing Input")
         raise typer.Exit(1)
@@ -66,7 +66,7 @@ def update(
 ):
     """Update a secret in the .env file."""
     if not secret:
-        secret = prompt_secrets_interactive(mask_value=False)
+        secret = prompt_secrets_interactive()
     if not secret:
         print_error("At least one KEY=value pair is required.", title="Missing Input")
         raise typer.Exit(1)

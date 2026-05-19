@@ -1,4 +1,6 @@
 # tests/unit/test_env_file_backend.py
+import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -105,17 +107,17 @@ def test_load_into_environ_on_add(tmp_path, monkeypatch):
 
 
 def test_write_uses_tmp_file(backend, tmp_path, mocker):
-    """Verify atomic write: .env.tmp is created then renamed."""
-    written_paths = []
-    original_write = Path.write_text
+    """Verify atomic write: os.replace is called with a .env.tmp source path."""
+    replaced_src = []
+    original_replace = os.replace
 
-    def track_write(self, *args, **kwargs):
-        written_paths.append(str(self))
-        return original_write(self, *args, **kwargs)
+    def track_replace(src, dst):
+        replaced_src.append(str(src))
+        return original_replace(src, dst)
 
-    mocker.patch.object(Path, "write_text", track_write)
+    mocker.patch("credential_bridge.backends.env_file.os.replace", track_replace)
     backend.add_secret("KEY", {"KEY": "val"})
-    assert any(".env.tmp" in p for p in written_paths)
+    assert any(".env.tmp" in p for p in replaced_src)
 
 
 def test_add_secret_quotes_value_with_spaces(backend, tmp_path):
@@ -233,3 +235,67 @@ def test_list_secrets_no_filter_returns_all(tmp_path):
     backend = EnvFileBackend(path=env_file)
     assert set(backend.list_secrets()) == {"FOO", "BAR"}
     assert set(backend.list_secrets("")) == {"FOO", "BAR"}
+
+
+# ---------------------------------------------------------------------------
+# Issue A: delete_secret must not remove an unrelated top-of-file comment
+# ---------------------------------------------------------------------------
+
+def test_delete_does_not_remove_top_of_file_comment(tmp_path):
+    """A comment at the top of the file (no blank line before it) must survive
+    when the key immediately below it is deleted."""
+    env_file = tmp_path / ".env"
+    env_file.write_text("# Important config\nMY_KEY=value\n", encoding="utf-8")
+    backend = EnvFileBackend(path=env_file)
+    backend.delete_secret("MY_KEY")
+    content = env_file.read_text()
+    assert "# Important config" in content
+    assert "MY_KEY" not in content
+
+
+def test_delete_removes_group_header_when_last_key_removed(tmp_path):
+    """Deleting the last key in a group created by add_secret must also remove
+    the group's comment header (preceded by a blank line)."""
+    backend = EnvFileBackend(path=tmp_path / ".env")
+    backend.add_secret("db", {"DB_URL": "localhost"})
+    backend.delete_secret("DB_URL")
+    content = (tmp_path / ".env").read_text()
+    assert "# db" not in content
+    assert "DB_URL" not in content
+
+
+# ---------------------------------------------------------------------------
+# Issue C: add_secret must refuse duplicate group names
+# ---------------------------------------------------------------------------
+
+def test_add_secret_raises_if_group_name_already_exists(tmp_path):
+    """Calling add_secret twice with the same group name (but different keys)
+    must raise EnvFileKeyExistsError rather than creating a duplicate header."""
+    from credential_bridge.exceptions import EnvFileKeyExistsError
+
+    backend = EnvFileBackend(path=tmp_path / ".env")
+    backend.add_secret("database", {"DB_HOST": "localhost"})
+    with pytest.raises(EnvFileKeyExistsError, match="database"):
+        backend.add_secret("database", {"DB_PORT": "5432"})
+
+
+# ---------------------------------------------------------------------------
+# Issue J: _write_lines must create the .tmp file with restricted permissions
+# ---------------------------------------------------------------------------
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file permissions not enforced on Windows")
+def test_tmp_file_created_with_restricted_permissions(tmp_path, mocker):
+    """The .env.tmp file must be created with 0o600 permissions so that
+    plaintext secrets are not readable by other users, even on crash."""
+    recorded = []
+    original_replace = os.replace
+
+    def capture_permissions(src, dst):
+        recorded.append(os.stat(src).st_mode & 0o777)
+        return original_replace(src, dst)
+
+    mocker.patch("credential_bridge.backends.env_file.os.replace", side_effect=capture_permissions)
+    backend = EnvFileBackend(path=tmp_path / ".env")
+    backend.add_secret("KEY", {"KEY": "val"})
+    assert recorded, "os.replace was never called"
+    assert recorded[0] == 0o600, f"Expected 0o600, got 0o{recorded[0]:o}"

@@ -370,3 +370,21 @@ def test_vault_call_does_not_rewrap_vault_errors(mock_hvac):
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
     with pytest.raises(VaultSecretNotFoundError, match="already mapped"):
         backend.get_secret("myapp/db")
+
+
+# ---------------------------------------------------------------------------
+# Issue D: get_secret must raise VaultSecretNotFoundError for soft-deleted secrets
+# ---------------------------------------------------------------------------
+
+
+def test_get_secret_raises_on_soft_deleted_secret(mock_hvac):
+    """KV-v2 returns HTTP 200 with data=null for soft-deleted secrets.
+    get_secret must raise VaultSecretNotFoundError rather than returning None."""
+    from credential_bridge.exceptions import VaultSecretNotFoundError
+
+    mock_hvac.secrets.kv.v2.read_secret.return_value = {
+        "data": {"data": None, "metadata": {"deletion_time": "2024-01-01T00:00:00Z"}}
+    }
+    backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
+    with pytest.raises(VaultSecretNotFoundError, match="soft-deleted"):
+        backend.get_secret("myapp/db")

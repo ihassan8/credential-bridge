@@ -1,7 +1,7 @@
 # src/credential_bridge/prompt_wizard.py
 import os
 import sys
-from typing import Optional
+from typing import Dict, Optional
 
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
@@ -16,6 +16,7 @@ from rich.text import Text
 
 # Importing _output triggers the Windows UTF-8 reconfiguration and provides
 # shared Rich helpers so we don't duplicate them here.
+from .backends.env_file import EnvFileBackend
 from .cli._output import print_result as _print_result_dict
 from .cli._output import print_table as _print_result_list
 from .exceptions import CredentialBridgeError
@@ -28,7 +29,9 @@ console = Console()
 _opt_style = Style.from_dict({"prompt": "fg:ansibrightcyan bold"})
 _entry_style = Style.from_dict({"prompt": "fg:ansibrightgreen bold"})
 
-# ── Shared history (persists across all prompts in a session) ─────────────────
+# ── Shared history for non-sensitive prompts only ─────────────────────────────
+# Password/secret prompts use a fresh InMemoryHistory() per call so that
+# credentials never accumulate in the up-arrow history.
 _history = InMemoryHistory()
 
 
@@ -78,11 +81,17 @@ def _print_banner() -> None:
 
 
 def _prompt(text: str, completer=None, is_password: bool = False) -> str:
-    """Wrapper around prompt_toolkit's prompt with shared history."""
+    """Wrapper around prompt_toolkit's prompt.
+
+    Non-secret prompts share _history so users get useful autocomplete for
+    paths and service names. Password prompts use a fresh InMemoryHistory()
+    each call so that credentials never appear in the up-arrow history of
+    subsequent prompts.
+    """
     return prompt(
         HTML(text),
         completer=completer,
-        history=_history,
+        history=InMemoryHistory() if is_password else _history,
         style=_entry_style,
         is_password=is_password,
     ).strip()
@@ -100,6 +109,15 @@ def _menu_prompt(text: str, completer=None) -> str:
         .strip()
         .lower()
     )
+
+
+def _confirm_delete(name: str) -> bool:
+    """Ask the user to retype *name* to confirm a destructive deletion."""
+    confirm = _prompt(f"<b><ansibrightgreen>  Type <u>{name}</u> to confirm deletion:</ansibrightgreen></b>  ")
+    if confirm != name:
+        _error("Name didn't match — deletion cancelled.")
+        return False
+    return True
 
 
 # ── Vault credential validation ───────────────────────────────────────────────
@@ -176,8 +194,12 @@ def _goodbye() -> None:
 
 
 def configure_keyring() -> None:
+    _section("Keyring")
+    # Prompt for service_name once — it applies to every action in this session.
+    service_name = _prompt("<b><ansibrightgreen>  Service name:</ansibrightgreen></b>  ")
+
     while True:
-        _section("Keyring")
+        _section(f"Keyring  ·  {service_name}")
         action_completer = WordCompleter(["add", "update", "delete", "get", "back"], ignore_case=True)
         action = _menu_prompt(
             "<b><ansibrightcyan>[Keyring]</ansibrightcyan></b>"
@@ -191,7 +213,6 @@ def configure_keyring() -> None:
             _error(f"Unknown action '{action}'.")
             continue
 
-        service_name = _prompt("<b><ansibrightgreen>  Service name:</ansibrightgreen></b>  ")
         name = _prompt("<b><ansibrightgreen>  Secret name:</ansibrightgreen></b>   ")
         secret: Optional[str] = None
 
@@ -200,6 +221,10 @@ def configure_keyring() -> None:
                 "<b><ansibrightgreen>  Secret value:</ansibrightgreen></b>  ",
                 is_password=True,
             )
+
+        if action == "delete" and not _confirm_delete(name):
+            console.print()
+            continue
 
         run_keyring_cli(action, service_name, name, secret)
         console.print()
@@ -302,7 +327,7 @@ def _save_vault_token(token: str) -> None:
             "vault_token": token,
             "vault_role_id": None,
             "vault_secret_id": None,
-            "vault_addr": os.environ.get("VAULT_ADDR", ""),
+            "vault_addr": os.environ.get("VAULT_ADDR") or None,
         }
     )
     save_config(cfg)
@@ -315,7 +340,7 @@ def _save_vault_approle(role_id: str, secret_id: str) -> None:
             "vault_role_id": role_id,
             "vault_secret_id": secret_id,
             "vault_token": None,
-            "vault_addr": os.environ.get("VAULT_ADDR", ""),
+            "vault_addr": os.environ.get("VAULT_ADDR") or None,
         }
     )
     save_config(cfg)
@@ -335,9 +360,22 @@ def _vault_action_loop(auth_label: str, vault_token=None, vault_role_id=None, va
         "get-config",
         "back",
     ]
+    # Actions that operate on a specific secret path
+    _PATH_ACTIONS = {
+        "add",
+        "update",
+        "delete",
+        "get",
+        "read-metadata",
+        "delete-versions",
+        "undelete-versions",
+        "destroy-versions",
+    }
+
     action_completer = WordCompleter(_VAULT_ACTIONS, ignore_case=True)
 
-    service_name = _prompt("<b><ansibrightgreen>  Service name (tag):</ansibrightgreen></b>    ")
+    # Mount point is fixed for the duration of this auth session.
+    mount_point = _prompt("<b><ansibrightgreen>  Mount point (KV engine path):</ansibrightgreen></b>    ")
 
     while True:
         _section(f"Vault  ·  {auth_label.replace('_', ' ').title()}")
@@ -353,7 +391,10 @@ def _vault_action_loop(auth_label: str, vault_token=None, vault_role_id=None, va
             _error(f"Unknown action '{action}'.")
             continue
 
-        secret_path = _prompt("<b><ansibrightgreen>  Secret path (e.g. myapp/db):</ansibrightgreen></b>  ")
+        # Only prompt for a secret path when the action actually uses one.
+        secret_path = ""
+        if action in _PATH_ACTIONS:
+            secret_path = _prompt("<b><ansibrightgreen>  Secret path (e.g. myapp/db):</ansibrightgreen></b>  ")
 
         secret_data: dict = {}
         versions = None
@@ -376,18 +417,22 @@ def _vault_action_loop(auth_label: str, vault_token=None, vault_role_id=None, va
 
         if action in ["delete-versions", "undelete-versions", "destroy-versions"]:
             while True:
+                raw = _prompt("<b><ansibrightgreen>  Versions (comma-separated, e.g. 1,2,3):</ansibrightgreen></b>  ")
                 try:
-                    num = int(_prompt("<b><ansibrightgreen>  Number of versions:</ansibrightgreen></b>  "))
-                    versions = []
-                    for _ in range(num):
-                        versions.append(int(_prompt("<b><ansibrightgreen>  Version number:</ansibrightgreen></b>  ")))
+                    versions = [int(v.strip()) for v in raw.split(",") if v.strip()]
+                    if not versions:
+                        raise ValueError
                     break
                 except ValueError:
-                    _error("Please enter numeric values for versions.")
+                    _error("Enter numeric version numbers separated by commas.")
+
+        if action == "delete" and not _confirm_delete(secret_path):
+            console.print()
+            continue
 
         run_vault_cli(
             action,
-            service_name,
+            mount_point,
             secret_path,
             secret_data,
             versions,
@@ -408,8 +453,6 @@ def configure_env() -> None:
         or ".env"
     )
 
-    from .backends.env_file import EnvFileBackend
-
     while True:
         _section(f".env  ·  {env_path}")
         action_completer = WordCompleter(["add", "get", "update", "delete", "list", "back"], ignore_case=True)
@@ -425,43 +468,45 @@ def configure_env() -> None:
             _error(f"Unknown action '{action}'.")
             continue
 
-        backend = EnvFileBackend(path=env_path)
+        name = ""
+        secret_dict: Dict[str, str] = {}
 
-        try:
-            if action == "list":
-                keys = backend.list_secrets()
-                _print_result_list(keys, title=f"Keys in {env_path}")
+        if action == "list":
+            run_env_cli("list", env_path, "", {})
 
-            elif action in ["add", "update"]:
-                name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen></b>   ")
-                value = _prompt("<b><ansibrightgreen>  Value:</ansibrightgreen></b>      ")
-                if action == "add":
-                    label = (
-                        _prompt(
-                            "<b><ansibrightgreen>  Group label</ansibrightgreen></b>"
-                            "  <ansiwhite>(leave blank to use key name):</ansiwhite>  "
-                        )
-                        or name
-                    )
-                    backend.add_secret(label, {name: value})
-                else:
-                    backend.update_secret(name, {name: value})
-                _success(f"{action.capitalize()} successful: [bold]{name}[/bold]")
+        elif action == "add":
+            label = _prompt(
+                "<b><ansibrightgreen>  Group label</ansibrightgreen></b>"
+                "  <ansiwhite>(leave blank to use first key name):</ansiwhite>  "
+            )
+            while True:
+                try:
+                    num = int(_prompt("<b><ansibrightgreen>  Number of key-value pairs:</ansibrightgreen></b>  "))
+                    if num < 1:
+                        raise ValueError
+                    break
+                except ValueError:
+                    _error("Please enter a positive integer.")
+            for i in range(num):
+                k = _prompt(f"<b><ansibrightgreen>  Key {i + 1}:</ansibrightgreen></b>    ")
+                v = _prompt(f"<b><ansibrightgreen>  Value {i + 1}:</ansibrightgreen></b>  ", is_password=True)
+                secret_dict[k] = v
+            name = label or next(iter(secret_dict))
+            run_env_cli("add", env_path, name, secret_dict)
 
-            elif action == "get":
-                name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen></b>  ")
-                result = backend.get_secret(name)
-                _print_result_dict(result, title=name)
+        elif action == "update":
+            name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen></b>   ")
+            value = _prompt("<b><ansibrightgreen>  New value:</ansibrightgreen></b>  ", is_password=True)
+            run_env_cli("update", env_path, name, {name: value})
 
-            elif action == "delete":
-                name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen></b>  ")
-                backend.delete_secret(name)
-                _success(f"Deleted [bold]{name}[/bold] from {env_path}.")
+        elif action == "get":
+            name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen></b>  ")
+            run_env_cli("get", env_path, name, {})
 
-        except CredentialBridgeError as e:
-            _error(str(e))
-        except Exception as e:
-            _error(f"Unexpected error: {e}")
+        elif action == "delete":
+            name = _prompt("<b><ansibrightgreen>  Key name:</ansibrightgreen></b>  ")
+            if _confirm_delete(name):
+                run_env_cli("delete", env_path, name, {})
 
         console.print()
 
@@ -472,8 +517,8 @@ def configure_env() -> None:
 def run_keyring_cli(action: str, service_name: str, name: str, secret: Optional[str]) -> None:
     from .manager import SecretsManager
 
-    manager = SecretsManager("keyring", service_name=service_name)
     try:
+        manager = SecretsManager("keyring", service_name=service_name)
         if action == "add":
             manager.add_secret(name, {name: secret})
             _success(f"Added [bold]{name}[/bold] to keyring service '{service_name}'.")
@@ -505,15 +550,15 @@ def run_vault_cli(
     from .manager import SecretsManager
 
     vault_url = os.environ.get("VAULT_ADDR") or load_config().get("vault_addr")
-    manager = SecretsManager(
-        "vault",
-        service_name=service_name,
-        vault_url=vault_url,
-        vault_token=vault_token,
-        vault_role_id=vault_role_id,
-        vault_secret_id=vault_secret_id,
-    )  # type: ignore[attr-defined]
     try:
+        manager = SecretsManager(
+            "vault",
+            mount_point=service_name,
+            vault_url=vault_url,
+            vault_token=vault_token,
+            vault_role_id=vault_role_id,
+            vault_secret_id=vault_secret_id,
+        )  # type: ignore[attr-defined]
         if action == "add":
             manager.add_secret(secret_path, secret_data)  # type: ignore[attr-defined]
             _success(f"Secret [bold]{secret_path}[/bold] added.")
@@ -546,6 +591,30 @@ def run_vault_cli(
             elif action == "get-config":
                 cfg = vault_backend.get_config()  # type: ignore[attr-defined]
                 _print_result_dict(cfg, title="Vault Config")
+    except CredentialBridgeError as e:
+        _error(str(e))
+    except Exception as e:
+        _error(f"Unexpected error: {e}")
+
+
+def run_env_cli(action: str, env_path: str, name: str, secret: Dict[str, str]) -> None:
+    backend = EnvFileBackend(path=env_path)
+    try:
+        if action == "list":
+            keys = backend.list_secrets()
+            _print_result_list(keys, title=f"Keys in {env_path}")
+        elif action == "add":
+            backend.add_secret(name, secret)
+            _success(f"Added group [bold]{name}[/bold] to {env_path}.")
+        elif action == "update":
+            backend.update_secret(name, secret)
+            _success(f"Updated [bold]{name}[/bold] in {env_path}.")
+        elif action == "get":
+            result = backend.get_secret(name)
+            _print_result_dict(result, title=name)
+        elif action == "delete":
+            backend.delete_secret(name)
+            _success(f"Deleted [bold]{name}[/bold] from {env_path}.")
     except CredentialBridgeError as e:
         _error(str(e))
     except Exception as e:

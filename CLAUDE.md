@@ -34,8 +34,20 @@ ruff check src/
 # Lint with auto-fix
 ruff check src/ --fix
 
+# Format check (mirrors CI)
+ruff format --check src/
+
+# Format in-place
+ruff format src/
+
 # Type check
 mypy src/
+
+# Dependency audit (matches CI audit job)
+pip-audit
+
+# Run tests with coverage
+pytest tests/unit/ --cov=src/
 ```
 
 Version is auto-generated from git tags via `setuptools_scm` — never commit `_version.py` (it is in `.gitignore`). Run `pip install -e .` to regenerate it after tagging.
@@ -63,7 +75,7 @@ src/credential_bridge/
 
 **Key design decisions:**
 - `BaseSecretBackend` enforces `backend_name` via `__init_subclass__` — forgetting to set it raises `TypeError` at class definition time.
-- `SecretsManager._registry` is a class-level dict. Built-in registered names: `"vault"` → `VaultBackend`, `"keyring"` → `KeyringBackend`, `"env"` → `EnvFileBackend`. `register_backend("name", MyBackend)` is how third-party backends plug in. Tests must use a `clean_registry` autouse fixture to isolate state.
+- `SecretsManager._registry` is a class-level dict. Built-in registered names: `"vault"` → `VaultBackend`, `"keyring"` → `KeyringBackend`, `"env"` → `EnvFileBackend`. `register_backend("name", MyBackend)` (import from `credential_bridge.manager`) is how third-party backends plug in. Tests must use a `clean_registry` autouse fixture (defined in `tests/conftest.py`) to isolate state.
 - `VaultBackend` URL resolution: `vault_url` arg → `VAULT_ADDR` env var → `~/.vault_config.json` → `ConfigurationError`.
 - `VaultBackend.__init__` resolves and validates `vault_url`/`VAULT_ADDR`/config **first**, before any other setup (fail-fast). `mount_point` defaults to `getpass.getuser()` via the cross-platform `_safe_getuser()` helper (catches `ModuleNotFoundError` from the missing `pwd` module on Windows).
 - `VaultBackend(persist=False)` is the default — credentials are NOT written to `~/.vault_config.json` unless `persist=True` is explicitly passed.
@@ -101,6 +113,17 @@ CredentialBridgeError
 └── ConfigurationError
 ```
 
+## Vault Environment Variables
+
+| Variable | Description |
+|---|---|
+| `VAULT_ADDR` | Vault server URL (e.g. `https://vault.example.com`) |
+| `VAULT_TOKEN` | Token auth method |
+| `VAULT_ROLE_ID` | AppRole auth: role ID |
+| `VAULT_SECRET_ID` | AppRole auth: secret ID |
+
+Resolution order for each: constructor argument → env var → `~/.vault_config.json` → `ConfigurationError`.
+
 ## Running the Package Directly
 
 `python -m credential_bridge` invokes the `cb` CLI (via `src/credential_bridge/__main__.py`).
@@ -120,6 +143,8 @@ git push origin 1.2.1
 ```
 
 Push to `main` (without a tag) deploys docs only. The tag format must be `X.Y.Z` (no `v` prefix).
+
+CI runs on Python 3.10, 3.11, and 3.12 across Ubuntu and Windows. `pip-audit` runs in CI as a separate audit job — keep dependencies free of known CVEs.
 
 ## Docs
 

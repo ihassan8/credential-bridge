@@ -229,7 +229,12 @@ class VaultBackend(BaseSecretBackend):
                 path=name,
                 mount_point=self.mount_point,
             )
-        return response["data"]["data"]  # type: ignore[no-any-return]
+        data = response["data"]["data"]
+        if data is None:
+            raise VaultSecretNotFoundError(
+                f"Secret '{name}' is soft-deleted. Restore it with undelete_secret_versions() first."
+            )
+        return data  # type: ignore[no-any-return]
 
     def update_secret(self, name: str, secret: Dict[str, Any]) -> None:
         """Update an existing secret."""
