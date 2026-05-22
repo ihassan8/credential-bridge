@@ -30,18 +30,40 @@ class SecretsManager:
         return self._backend
 
     def add_secret(self, name: str, secret: Dict[str, Any]) -> None:
+        """Store *secret* under *name*. Delegates to the active backend.
+
+        See the underlying backend's add_secret for per-backend behavior —
+        notably, idempotency differs (Vault overwrites, Keyring and EnvFile
+        raise on existing names).
+        """
         self._backend.add_secret(name, secret)
 
     def get_secret(self, name: str) -> Dict[str, Any]:
+        """Retrieve the secret stored under *name*. Delegates to the active backend.
+
+        Raises the backend's per-type NotFound exception if absent — e.g.
+        VaultSecretNotFoundError, KeyringSecretNotFoundError, EnvFileNotFoundError.
+        """
         return self._backend.get_secret(name)
 
     def update_secret(self, name: str, secret: Dict[str, Any]) -> None:
+        """Update the secret stored under *name*. Delegates to the active backend.
+
+        See the backend's update_secret for merge-vs-replace semantics: Vault
+        merges keys, Keyring replaces the whole dict, EnvFile replaces each
+        supplied key in place.
+        """
         self._backend.update_secret(name, secret)
 
     def delete_secret(self, name: str) -> None:
+        """Delete the secret stored under *name*. Delegates to the active backend."""
         self._backend.delete_secret(name)
 
     def list_secrets(self, path: str = "") -> List[str]:
+        """List secret names, optionally under *path*. Delegates to the active backend.
+
+        See BaseSecretBackend.list_secrets for the per-backend meaning of *path*.
+        """
         return self._backend.list_secrets(path)
 
 

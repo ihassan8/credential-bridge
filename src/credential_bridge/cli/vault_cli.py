@@ -5,7 +5,7 @@ from typing import List, Optional
 import typer
 
 from ..backends.vault import VaultBackend
-from ..exceptions import CredentialBridgeError, VaultSecretNotFoundError
+from ..exceptions import CredentialBridgeError
 from ._output import (
     parse_secrets,
     print_error,
@@ -91,9 +91,6 @@ def get(
             typer.echo(json.dumps(result))
         else:
             print_result(result, title=name)
-    except VaultSecretNotFoundError:
-        print_error(f"Secret [bold]{name}[/bold] does not exist.", title="Not Found")
-        raise typer.Exit(1)
     except CredentialBridgeError as e:
         print_error(str(e))
         raise typer.Exit(1)
@@ -125,9 +122,6 @@ def update(
     try:
         backend.update_secret(name, secret_dict)
         print_success(f"Secret [bold]{name}[/bold] updated.")
-    except VaultSecretNotFoundError:
-        print_error(f"Secret [bold]{name}[/bold] does not exist.", title="Not Found")
-        raise typer.Exit(1)
     except CredentialBridgeError as e:
         print_error(str(e))
         raise typer.Exit(1)
@@ -151,9 +145,6 @@ def delete(
     try:
         backend.delete_secret(name)
         print_success(f"Secret [bold]{name}[/bold] permanently deleted.")
-    except VaultSecretNotFoundError:
-        print_error(f"Secret [bold]{name}[/bold] does not exist.", title="Not Found")
-        raise typer.Exit(1)
     except CredentialBridgeError as e:
         print_error(str(e))
         raise typer.Exit(1)

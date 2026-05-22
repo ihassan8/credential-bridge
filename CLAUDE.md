@@ -52,6 +52,12 @@ pytest tests/unit/ --cov=src/
 
 Version is auto-generated from git tags via `setuptools_scm` — never commit `_version.py` (it is in `.gitignore`). Run `pip install -e .` to regenerate it after tagging.
 
+Dependencies live in three separate files, not in `pyproject.toml` directly: `requirements.txt` (runtime), `requirements-dev.txt` (`[dev]` extra), `requirements-docs.txt` (`[docs]` extra). `pyproject.toml` reads them via `[tool.setuptools.dynamic]` — editing dependency lists inside `pyproject.toml` has no effect.
+
+## Tests
+
+`tests/unit/` mirrors `src/credential_bridge/` 1:1 (`test_<module>.py` per source module). `tests/integration/` is gated by the `integration` pytest marker and may require a running Vault server. `tests/conftest.py` defines the autouse `clean_registry` fixture that snapshots and restores `SecretsManager._registry` around each test — required because the registry is class-level state.
+
 ## Architecture
 
 ```

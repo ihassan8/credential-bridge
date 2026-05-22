@@ -1,7 +1,10 @@
 # src/credential_bridge/prompt_wizard.py
 import os
 import sys
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional, cast
+
+if TYPE_CHECKING:
+    from .backends.vault import VaultBackend
 
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import WordCompleter
@@ -322,12 +325,15 @@ def configure_vault() -> None:
 
 def _save_vault_token(token: str) -> None:
     cfg = load_config()
+    # Preserve any previously saved vault_addr if VAULT_ADDR is not exported in
+    # the current shell — otherwise saving a token would clobber a known-good
+    # address with None and break the next CLI invocation.
     cfg.update(
         {
             "vault_token": token,
             "vault_role_id": None,
             "vault_secret_id": None,
-            "vault_addr": os.environ.get("VAULT_ADDR") or None,
+            "vault_addr": os.environ.get("VAULT_ADDR") or cfg.get("vault_addr"),
         }
     )
     save_config(cfg)
@@ -340,7 +346,7 @@ def _save_vault_approle(role_id: str, secret_id: str) -> None:
             "vault_role_id": role_id,
             "vault_secret_id": secret_id,
             "vault_token": None,
-            "vault_addr": os.environ.get("VAULT_ADDR") or None,
+            "vault_addr": os.environ.get("VAULT_ADDR") or cfg.get("vault_addr"),
         }
     )
     save_config(cfg)
@@ -539,7 +545,7 @@ def run_keyring_cli(action: str, service_name: str, name: str, secret: Optional[
 
 def run_vault_cli(
     action: str,
-    service_name: str,
+    mount_point: str,
     secret_path: str,
     secret_data: dict,
     versions=None,
@@ -547,50 +553,54 @@ def run_vault_cli(
     vault_role_id=None,
     vault_secret_id=None,
 ) -> None:
+    from .backends.vault import VaultBackend as _VaultBackend
     from .manager import SecretsManager
 
     vault_url = os.environ.get("VAULT_ADDR") or load_config().get("vault_addr")
     try:
         manager = SecretsManager(
             "vault",
-            mount_point=service_name,
+            mount_point=mount_point,
             vault_url=vault_url,
             vault_token=vault_token,
             vault_role_id=vault_role_id,
             vault_secret_id=vault_secret_id,
-        )  # type: ignore[attr-defined]
+        )
         if action == "add":
-            manager.add_secret(secret_path, secret_data)  # type: ignore[attr-defined]
+            manager.add_secret(secret_path, secret_data)
             _success(f"Secret [bold]{secret_path}[/bold] added.")
         elif action == "get":
-            result = manager.get_secret(secret_path)  # type: ignore[attr-defined]
+            result = manager.get_secret(secret_path)
             _print_result_dict(result, title=secret_path)
         elif action == "update":
-            manager.update_secret(secret_path, secret_data)  # type: ignore[attr-defined]
+            manager.update_secret(secret_path, secret_data)
             _success(f"Secret [bold]{secret_path}[/bold] updated.")
         elif action == "delete":
-            manager.delete_secret(secret_path)  # type: ignore[attr-defined]
+            manager.delete_secret(secret_path)
             _success(f"Secret [bold]{secret_path}[/bold] deleted.")
         elif action == "list":
             keys = manager.list_secrets(secret_path)
             _print_result_list(keys, title=f"Secrets at {secret_path or '/'}")
         elif action in ("read-metadata", "delete-versions", "undelete-versions", "destroy-versions", "get-config"):
-            vault_backend = manager.backend
+            # The remaining actions reach into VaultBackend-specific helpers
+            # that aren't on the BaseSecretBackend ABC, so cast once.
+            vault_backend = cast("VaultBackend", manager.backend)
+            assert isinstance(vault_backend, _VaultBackend), "vault action requires VaultBackend"
             if action == "read-metadata":
-                meta = vault_backend.read_secret_metadata(secret_path)  # type: ignore[attr-defined]
-                _print_result_dict(meta, title=f"Metadata: {secret_path}")
+                meta = vault_backend.read_secret_metadata(secret_path)
+                _print_result_dict(meta or {}, title=f"Metadata: {secret_path}")
             elif action == "delete-versions":
-                vault_backend.delete_secret_versions(secret_path, versions)  # type: ignore[attr-defined]
+                vault_backend.delete_secret_versions(secret_path, versions)
                 _success(f"Soft-deleted versions {versions} of [bold]{secret_path}[/bold].")
             elif action == "undelete-versions":
-                vault_backend.undelete_secret_versions(secret_path, versions)  # type: ignore[attr-defined]
+                vault_backend.undelete_secret_versions(secret_path, versions)
                 _success(f"Restored versions {versions} of [bold]{secret_path}[/bold].")
             elif action == "destroy-versions":
-                vault_backend.destroy_secret_versions(secret_path, versions)  # type: ignore[attr-defined]
+                vault_backend.destroy_secret_versions(secret_path, versions)
                 _success(f"Permanently destroyed versions {versions} of [bold]{secret_path}[/bold].")
             elif action == "get-config":
-                cfg = vault_backend.get_config()  # type: ignore[attr-defined]
-                _print_result_dict(cfg, title="Vault Config")
+                cfg = vault_backend.get_config()
+                _print_result_dict(cfg or {}, title="Vault Config")
     except CredentialBridgeError as e:
         _error(str(e))
     except Exception as e:

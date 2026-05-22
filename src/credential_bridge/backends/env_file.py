@@ -1,11 +1,14 @@
 # src/credential_bridge/backends/env_file.py
 import os
 import sys
+import warnings
+from contextlib import contextmanager
 from io import StringIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Generator, List, Optional, Union
 
 from dotenv import dotenv_values
+from filelock import FileLock, Timeout
 
 from ..exceptions import EnvFileError, EnvFileKeyExistsError, EnvFileNotFoundError
 from .base import BaseSecretBackend
@@ -38,10 +41,24 @@ class EnvFileBackend(BaseSecretBackend):
         path: Union[str, Path] = ".env",
         load_into_environ: bool = False,
         encoding: str = "utf-8",
+        lock_timeout: float = 10.0,
     ) -> None:
         self.path = Path(path).resolve()
+        # Fail-fast on a path that exists but isn't a regular file (e.g. a
+        # directory or socket). Subsequent ops would otherwise fail with
+        # confusing IsADirectoryError / PermissionError later.
+        if self.path.exists() and not self.path.is_file():
+            raise EnvFileError(f"{self.path} exists and is not a regular file.")
         self.load_into_environ = load_into_environ
         self.encoding = encoding
+        # Track whether the Windows-perms warning has fired so we only emit it
+        # once per backend instance rather than per write.
+        self._warned_perms = False
+        # Cross-platform advisory lock for inter-process safety. The lock file
+        # lives next to the .env file as `<name>.lock` so it's visible to other
+        # processes targeting the same path.
+        self._lock_timeout = lock_timeout
+        self._lock = FileLock(str(self.path) + ".lock", timeout=lock_timeout)
 
     def _read_lines(self) -> List[str]:
         if not self.path.exists():
@@ -53,6 +70,14 @@ class EnvFileBackend(BaseSecretBackend):
         try:
             content = "".join(lines).encode(self.encoding)
             if sys.platform == "win32":
+                if not self._warned_perms:
+                    warnings.warn(
+                        f"Secrets written to {self.path} without restricted permissions. "
+                        "Consider restricting file access manually on Windows.",
+                        UserWarning,
+                        stacklevel=3,
+                    )
+                    self._warned_perms = True
                 tmp.write_bytes(content)
             else:
                 fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -73,7 +98,16 @@ class EnvFileBackend(BaseSecretBackend):
         return self._parse_lines(self._read_lines()) if self.path.exists() else {}
 
     def _keys_for_group(self, group_name: str, lines: Optional[List[str]] = None) -> List[str]:
-        """Return env-var keys that appear under a '# group_name' comment block."""
+        """Return env-var keys that appear under a '# group_name' comment block.
+
+        Note: enumeration stops at the next comment line of any kind, including
+        inline annotations the user may have added by hand. The library only
+        writes group-header comments via add_secret, so this assumption holds
+        for files managed exclusively through credential-bridge. If a file has
+        been hand-edited to add comments inside a group, keys after the
+        annotation will not be returned and won't be cleaned up by
+        delete_secret(group_name).
+        """
         if lines is None:
             lines = self._read_lines()
         in_group = False
@@ -90,30 +124,49 @@ class EnvFileBackend(BaseSecretBackend):
                     result.append(stripped.split("=", 1)[0].strip())
         return result
 
+    @contextmanager
+    def _locked(self) -> Generator[None, None, None]:
+        """Hold the cross-process advisory lock for the duration of a CRUD op.
+
+        Raises EnvFileError on timeout so callers see a credential-bridge
+        exception rather than the underlying filelock.Timeout.
+        """
+        try:
+            with self._lock:
+                yield
+        except Timeout as exc:
+            raise EnvFileError(
+                f"Timed out after {self._lock_timeout}s waiting for lock on {self.path}. Another process is holding it."
+            ) from exc
+
     def _sync_environ(self, keys: Dict[str, str]) -> None:
         for k, v in keys.items():
             os.environ[k] = str(v)
 
     def add_secret(self, name: str, secret: Dict[str, Any]) -> None:
-        lines = self._read_lines()
-        existing = self._parse_lines(lines)
-        conflicts = [k for k in secret if k in existing]
-        if conflicts:
-            raise EnvFileKeyExistsError(
-                f"Key(s) already exist in {self.path}: {conflicts}. Use update_secret() to change them."
-            )
-        if any(line.strip() == f"# {name}" for line in lines):
-            raise EnvFileKeyExistsError(
-                f"Group '{name}' already exists in {self.path}. Use update_secret() to modify its keys."
-            )
-        lines.append(f"\n# {name}\n")
-        for k, v in secret.items():
-            lines.append(f"{k}={_quote_value(str(v))}\n")
-        self._write_lines(lines)
-        if self.load_into_environ:
-            self._sync_environ({k: str(v) for k, v in secret.items()})
+        with self._locked():
+            lines = self._read_lines()
+            existing = self._parse_lines(lines)
+            conflicts = [k for k in secret if k in existing]
+            if conflicts:
+                raise EnvFileKeyExistsError(
+                    f"Key(s) already exist in {self.path}: {conflicts}. Use update_secret() to change them."
+                )
+            if any(line.strip() == f"# {name}" for line in lines):
+                raise EnvFileKeyExistsError(
+                    f"Group '{name}' already exists in {self.path}. Use update_secret() to modify its keys."
+                )
+            lines.append(f"\n# {name}\n")
+            for k, v in secret.items():
+                lines.append(f"{k}={_quote_value(str(v))}\n")
+            self._write_lines(lines)
+            if self.load_into_environ:
+                self._sync_environ({k: str(v) for k, v in secret.items()})
 
     def get_secret(self, name: str) -> Dict[str, Any]:
+        # Unlocked: a single os-level file read is already atomic relative to
+        # os.replace writes, so a concurrent writer never exposes a partial
+        # file. Taking the lock here would serialize all reads for no benefit.
         lines = self._read_lines()
         keys = self._parse_lines(lines)
         if name in keys:
@@ -124,26 +177,31 @@ class EnvFileBackend(BaseSecretBackend):
         raise EnvFileNotFoundError(f"Key or group '{name}' not found in {self.path}.")
 
     def update_secret(self, name: str, secret: Dict[str, Any]) -> None:
-        existing = self._current_keys()
-        missing = [k for k in secret if k not in existing]
-        if missing:
-            raise EnvFileNotFoundError(f"Key(s) {missing} not found in {self.path}. Use add_secret() first.")
-        lines = self._read_lines()
-        updated: Dict[str, str] = {}
-        new_lines = []
-        for line in lines:
-            if "=" in line and not line.strip().startswith("#"):
-                key = line.split("=", 1)[0].strip()
-                if key in secret:
-                    new_lines.append(f"{key}={_quote_value(str(secret[key]))}\n")
-                    updated[key] = str(secret[key])
-                    continue
-            new_lines.append(line)
-        self._write_lines(new_lines)
-        if self.load_into_environ:
-            self._sync_environ(updated)
+        with self._locked():
+            existing = self._current_keys()
+            missing = [k for k in secret if k not in existing]
+            if missing:
+                raise EnvFileNotFoundError(f"Key(s) {missing} not found in {self.path}. Use add_secret() first.")
+            lines = self._read_lines()
+            updated: Dict[str, str] = {}
+            new_lines = []
+            for line in lines:
+                if "=" in line and not line.strip().startswith("#"):
+                    key = line.split("=", 1)[0].strip()
+                    if key in secret:
+                        new_lines.append(f"{key}={_quote_value(str(secret[key]))}\n")
+                        updated[key] = str(secret[key])
+                        continue
+                new_lines.append(line)
+            self._write_lines(new_lines)
+            if self.load_into_environ:
+                self._sync_environ(updated)
 
     def delete_secret(self, name: str) -> None:
+        with self._locked():
+            self._delete_secret_locked(name)
+
+    def _delete_secret_locked(self, name: str) -> None:
         lines = self._read_lines()
         existing = self._parse_lines(lines)
 

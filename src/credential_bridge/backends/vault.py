@@ -79,16 +79,18 @@ class VaultBackend(BaseSecretBackend):
         self.session = get_session(cert, proxies)
 
         # --- Resolve credentials (args override config) ---
-        self.vault_token = vault_token or config.get("vault_token")
-        self.vault_role_id = vault_role_id or config.get("vault_role_id")
-        self.vault_secret_id = vault_secret_id or config.get("vault_secret_id")
+        # Stored under underscore-prefixed names to keep the secret material off
+        # the public attribute surface (vault_addr / mount_point remain public).
+        self._vault_token = vault_token or config.get("vault_token")
+        self._vault_role_id = vault_role_id or config.get("vault_role_id")
+        self._vault_secret_id = vault_secret_id or config.get("vault_secret_id")
 
         # Token and AppRole are mutually exclusive
-        if self.vault_token and (self.vault_role_id or self.vault_secret_id):
+        if self._vault_token and (self._vault_role_id or self._vault_secret_id):
             raise ConfigurationError("Provide either a Vault token or AppRole credentials, not both.")
 
         # At least one auth method must be present
-        if not self.vault_token and not (self.vault_role_id and self.vault_secret_id):
+        if not self._vault_token and not (self._vault_role_id and self._vault_secret_id):
             raise ConfigurationError(
                 "No authentication method provided. Please provide either a token or AppRole credentials."
             )
@@ -112,7 +114,7 @@ class VaultBackend(BaseSecretBackend):
         self.client = self._authenticate()
 
     def __repr__(self) -> str:
-        auth = "token" if self.vault_token else "approle"
+        auth = "token" if self._vault_token else "approle"
         return f"VaultBackend(vault_addr={self.vault_addr!r}, auth={auth!r}, mount_point={self.mount_point!r})"
 
     # ------------------------------------------------------------------
@@ -124,10 +126,10 @@ class VaultBackend(BaseSecretBackend):
         self.logger.info("Authenticating with Vault...")
         try:
             tls_verify = self.cert if self.cert is not None else True
-            if self.vault_token:
+            if self._vault_token:
                 client = hvac.Client(
                     url=self.vault_addr,
-                    token=self.vault_token,
+                    token=self._vault_token,
                     session=self.session,
                     verify=tls_verify,
                 )
@@ -143,8 +145,8 @@ class VaultBackend(BaseSecretBackend):
                 verify=tls_verify,
             )
             auth_response = client.auth.approle.login(
-                role_id=self.vault_role_id,
-                secret_id=self.vault_secret_id,
+                role_id=self._vault_role_id,
+                secret_id=self._vault_secret_id,
             )
             if "auth" not in auth_response or "client_token" not in auth_response["auth"]:
                 raise VaultAuthError("Failed to authenticate with Vault using AppRole.")
@@ -175,7 +177,7 @@ class VaultBackend(BaseSecretBackend):
                 self.client.auth.token.renew_self()
                 self.logger.info("Vault token refreshed.")
         except hvac.exceptions.Forbidden as e:
-            if self.vault_role_id and self.vault_secret_id:
+            if self._vault_role_id and self._vault_secret_id:
                 self.logger.info("AppRole token expired, re-authenticating...")
                 self.client = self._authenticate()
             else:
@@ -183,7 +185,15 @@ class VaultBackend(BaseSecretBackend):
         except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout, ConnectionError, OSError) as e:
             raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {e}") from e
         except Exception as e:
-            self.logger.warning("Token refresh check failed (will retry on next operation): %s", e)
+            # Broad catch is intentional: we don't want a transient lookup
+            # failure to break the actual user operation that follows. Include
+            # the exception type so the next op's failure (if any) is easier
+            # to correlate back to this swallowed error.
+            self.logger.warning(
+                "Token refresh check failed (%s: %s); will retry on next operation.",
+                type(e).__name__,
+                e,
+            )
 
     # ------------------------------------------------------------------
     # Exception mapping context manager

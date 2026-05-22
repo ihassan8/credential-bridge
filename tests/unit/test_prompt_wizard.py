@@ -94,10 +94,12 @@ def test_run_vault_cli_uses_secret_path_not_service_name(mocker):
 # Bug: SecretsManager construction outside try/except crashes wizard on init error
 # ---------------------------------------------------------------------------
 
+
 def test_run_keyring_cli_handles_init_credential_bridge_error(mocker):
     """ConfigurationError raised during SecretsManager.__init__ must be caught
     and shown via _error, not propagate as an unhandled exception."""
     from credential_bridge.exceptions import ConfigurationError
+
     mocker.patch("credential_bridge.manager.SecretsManager", side_effect=ConfigurationError("no config"))
     spy = mocker.patch("credential_bridge.prompt_wizard._error")
     from credential_bridge.prompt_wizard import run_keyring_cli
@@ -110,6 +112,7 @@ def test_run_vault_cli_handles_init_credential_bridge_error(mocker):
     """ConfigurationError raised during SecretsManager.__init__ must be caught
     and shown via _error, not propagate as an unhandled exception."""
     from credential_bridge.exceptions import ConfigurationError
+
     mocker.patch("credential_bridge.manager.SecretsManager", side_effect=ConfigurationError("no vault url"))
     mocker.patch("credential_bridge.prompt_wizard.load_config", return_value={})
     spy = mocker.patch("credential_bridge.prompt_wizard._error")
@@ -122,6 +125,7 @@ def test_run_vault_cli_handles_init_credential_bridge_error(mocker):
 # ---------------------------------------------------------------------------
 # Bug: _save_vault_token / _save_vault_approle persist "" for vault_addr
 # ---------------------------------------------------------------------------
+
 
 def test_save_vault_token_persists_none_when_vault_addr_unset(monkeypatch, mocker):
     monkeypatch.delenv("VAULT_ADDR", raising=False)
@@ -145,9 +149,41 @@ def test_save_vault_approle_persists_none_when_vault_addr_unset(monkeypatch, moc
     assert saved.get("vault_addr") is None, f"Expected None, got {saved.get('vault_addr')!r}"
 
 
+def test_save_vault_token_preserves_existing_vault_addr_when_env_unset(monkeypatch, mocker):
+    """Regression: saving a token must not clobber a previously-saved vault_addr
+    just because VAULT_ADDR is not exported in the current shell."""
+    monkeypatch.delenv("VAULT_ADDR", raising=False)
+    mock_save = mocker.patch("credential_bridge.prompt_wizard.save_config")
+    mocker.patch(
+        "credential_bridge.prompt_wizard.load_config",
+        return_value={"vault_addr": "https://vault.example.com"},
+    )
+    from credential_bridge.prompt_wizard import _save_vault_token
+
+    _save_vault_token("s.test")
+    saved = mock_save.call_args[0][0]
+    assert saved.get("vault_addr") == "https://vault.example.com"
+
+
+def test_save_vault_approle_preserves_existing_vault_addr_when_env_unset(monkeypatch, mocker):
+    """Regression: same as above for AppRole credentials."""
+    monkeypatch.delenv("VAULT_ADDR", raising=False)
+    mock_save = mocker.patch("credential_bridge.prompt_wizard.save_config")
+    mocker.patch(
+        "credential_bridge.prompt_wizard.load_config",
+        return_value={"vault_addr": "https://vault.example.com"},
+    )
+    from credential_bridge.prompt_wizard import _save_vault_approle
+
+    _save_vault_approle("role-id", "secret-id")
+    saved = mock_save.call_args[0][0]
+    assert saved.get("vault_addr") == "https://vault.example.com"
+
+
 # ---------------------------------------------------------------------------
 # Bug: service_name is silently dropped by VaultBackend; should be mount_point
 # ---------------------------------------------------------------------------
+
 
 def test_run_vault_cli_passes_service_name_as_mount_point(mocker):
     """The wizard's 'service_name' (mount-point tag) must reach SecretsManager
@@ -166,6 +202,7 @@ def test_run_vault_cli_passes_service_name_as_mount_point(mocker):
 # ---------------------------------------------------------------------------
 # New: run_env_cli dispatch helper (extracted from configure_env)
 # ---------------------------------------------------------------------------
+
 
 def test_run_env_cli_add(mocker):
     mock_backend = MagicMock()
@@ -197,6 +234,7 @@ def test_run_env_cli_delete(mocker):
 
 def test_run_env_cli_handles_credential_bridge_error(mocker):
     from credential_bridge.exceptions import EnvFileNotFoundError
+
     mock_backend = MagicMock()
     mock_backend.get_secret.side_effect = EnvFileNotFoundError("not found")
     mocker.patch("credential_bridge.prompt_wizard.EnvFileBackend", return_value=mock_backend)

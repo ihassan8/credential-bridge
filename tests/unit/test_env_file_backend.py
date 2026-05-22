@@ -1,7 +1,6 @@
 # tests/unit/test_env_file_backend.py
 import os
 import sys
-from pathlib import Path
 
 import pytest
 
@@ -241,6 +240,7 @@ def test_list_secrets_no_filter_returns_all(tmp_path):
 # Issue A: delete_secret must not remove an unrelated top-of-file comment
 # ---------------------------------------------------------------------------
 
+
 def test_delete_does_not_remove_top_of_file_comment(tmp_path):
     """A comment at the top of the file (no blank line before it) must survive
     when the key immediately below it is deleted."""
@@ -268,6 +268,7 @@ def test_delete_removes_group_header_when_last_key_removed(tmp_path):
 # Issue C: add_secret must refuse duplicate group names
 # ---------------------------------------------------------------------------
 
+
 def test_add_secret_raises_if_group_name_already_exists(tmp_path):
     """Calling add_secret twice with the same group name (but different keys)
     must raise EnvFileKeyExistsError rather than creating a duplicate header."""
@@ -282,6 +283,7 @@ def test_add_secret_raises_if_group_name_already_exists(tmp_path):
 # ---------------------------------------------------------------------------
 # Issue J: _write_lines must create the .tmp file with restricted permissions
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX file permissions not enforced on Windows")
 def test_tmp_file_created_with_restricted_permissions(tmp_path, mocker):

@@ -66,6 +66,7 @@ def test_update_command_malformed_secret_exits_with_error(mock_env_backend):
 # Issue K: interactive add/update must mask secret values (not echo plaintext)
 # ---------------------------------------------------------------------------
 
+
 def test_add_command_interactive_masks_secret_input(mocker, mock_env_backend):
     """prompt_secrets_interactive must be called without mask_value=False so
     that typed secrets are hidden (consistent with vault-cli and keyring-cli)."""
@@ -76,9 +77,7 @@ def test_add_command_interactive_masks_secret_input(mocker, mock_env_backend):
     runner.invoke(app, ["add", "GROUP"])
     mock_prompt.assert_called_once()
     _, kwargs = mock_prompt.call_args
-    assert kwargs.get("mask_value") is not False, (
-        "env-cli add called prompt_secrets_interactive with mask_value=False"
-    )
+    assert kwargs.get("mask_value") is not False, "env-cli add called prompt_secrets_interactive with mask_value=False"
 
 
 def test_update_command_interactive_masks_secret_input(mocker, mock_env_backend):

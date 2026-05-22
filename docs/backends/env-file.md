@@ -28,6 +28,7 @@ easily-diffed config file that is excluded from version control.
 | `path` | `str \| Path` | `".env"` | Path to the `.env` file. Resolved to an absolute path at init time. |
 | `load_into_environ` | `bool` | `False` | If `True`, sync written keys into `os.environ` on every mutating operation. |
 | `encoding` | `str` | `"utf-8"` | File encoding used for reading and writing. |
+| `lock_timeout` | `float` | `10.0` | Seconds to wait for the inter-process write lock before raising `EnvFileError`. See [Concurrent safety](#concurrent-safety). |
 
 ### Path resolution
 
@@ -45,6 +46,10 @@ backend = EnvFileBackend(path=".env")
 os.chdir("/tmp")  # Does NOT change which file backend uses
 backend.list_secrets()  # Still reads /home/user/project/.env
 ```
+
+If `path` exists but is not a regular file (e.g. a directory or a socket),
+`__init__` raises `EnvFileError` immediately — subsequent CRUD operations would
+otherwise fail with a confusing `IsADirectoryError` or `PermissionError`.
 
 ## The `name` parameter
 
@@ -247,6 +252,57 @@ mid-write:
 `os.replace()` is atomic on POSIX systems and atomic on NTFS on Windows (within
 the same volume), so a concurrent reader never sees a partial write.
 
+## Concurrent safety
+
+`EnvFileBackend` holds a cross-process advisory file lock during every write
+operation (`add_secret`, `update_secret`, `delete_secret`). Two processes
+calling `add_secret` simultaneously will serialise on the lock instead of
+racing read-modify-write cycles and losing each other's keys.
+
+The lock file lives next to the target file as `<path>.lock` — for example,
+`.env` produces `.env.lock`. The lock is purely a coordination file; it never
+contains secret material. Add `*.env.lock` to `.gitignore` alongside `.env`:
+
+```gitignore
+.env
+.env.lock
+```
+
+Reads (`get_secret`, `list_secrets`) are not locked — a single OS-level file
+read is already atomic relative to `os.replace`, so a concurrent writer never
+exposes a partial file. Skipping the lock on reads avoids serialising read-heavy
+workloads for no correctness benefit.
+
+If another process holds the lock for longer than `lock_timeout` seconds (10.0
+by default), the operation raises `EnvFileError`:
+
+```python
+from credential_bridge import EnvFileBackend, EnvFileError
+
+backend = EnvFileBackend(path=".env", lock_timeout=2.0)
+try:
+    backend.add_secret("KEY", {"KEY": "value"})
+except EnvFileError as exc:
+    print(f"Could not acquire lock: {exc}")
+```
+
+The lock is advisory across processes only — it does not protect against
+threads inside a single process sharing one backend instance and racing on
+in-memory state. Construct a new backend per thread, or guard your own code
+with a `threading.Lock` if you need that.
+
+## File permissions
+
+On POSIX systems the `.env` file is created with mode `0600` (owner read/write
+only) via the `os.open` + `O_CREAT` path used during atomic writes.
+
+!!! warning "Windows permissions are not restricted"
+    On Windows, NTFS ACLs require the `win32security` module to set
+    programmatically. `EnvFileBackend` writes the file with default inherited
+    ACLs and emits a `UserWarning` the first time a write happens, mirroring the
+    behaviour of `~/.vault_config.json` on the same platform. Restrict the
+    file's ACLs manually if it lives somewhere shared.
+
 ## Loading into `os.environ`
 
 Set `load_into_environ=True` to have every mutating operation automatically sync
@@ -303,6 +359,9 @@ except EnvFileNotFoundError:
 | `EnvFileNotFoundError` | `get_secret()` called with a key or group label not in the file | Check key names with `list_secrets()`; check group labels by reading the file |
 | `EnvFileNotFoundError` | `delete_secret()` called with a key or group label not in the file | Verify the name with `list_secrets()` |
 | `EnvFileNotFoundError` | `update_secret()` called when one or more specified keys are missing | Use `add_secret()` to create them first |
+| `EnvFileError` | `EnvFileBackend(path=…)` called with a path that exists but is not a regular file (directory, socket, etc.) | Pass a path to a regular file or one that does not yet exist |
+| `EnvFileError` | Could not acquire the inter-process write lock within `lock_timeout` seconds | Investigate which process is holding `<path>.lock`; increase `lock_timeout` if writes are legitimately long |
+| `EnvFileError` | Underlying disk I/O failure during write | Check disk space, permissions, and that the parent directory is writable |
 
 `EnvFileNotFoundError` and `EnvFileKeyExistsError` are both subclasses of
 `EnvFileError`, which is itself a subclass of `BackendError`.

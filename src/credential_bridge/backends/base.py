@@ -62,4 +62,16 @@ class BaseSecretBackend(ABC):
 
     @abstractmethod
     def list_secrets(self, path: str = "") -> List[str]:
-        """List secret names, optionally under a path prefix."""
+        """List secret names, optionally under a path prefix.
+
+        Semantics vary by backend because the underlying stores differ:
+        - VaultBackend: returns child keys at the given KV-v2 hierarchical path.
+          A trailing '/' is implied; pass "" for the mount root.
+        - KeyringBackend: always raises KeyringError — Windows Credential
+          Manager and macOS Keychain do not expose enumeration APIs.
+        - EnvFileBackend: returns flat key names; when *path* is non-empty it
+          filters by key-name prefix (.env files have no real hierarchy).
+
+        Callers writing backend-agnostic code should treat *path* as advisory
+        and be prepared for KeyringError.
+        """

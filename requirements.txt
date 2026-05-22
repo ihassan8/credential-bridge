@@ -5,3 +5,4 @@ prompt-toolkit>=3.0.0
 pylogshield>=0.0.7
 typer[all]>=0.12
 python-dotenv>=1.0
+filelock>=3.12
