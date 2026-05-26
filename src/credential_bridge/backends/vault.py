@@ -79,9 +79,9 @@ class VaultBackend(BaseSecretBackend):
         # --- Resolve credentials (args override config) ---
         # Stored under underscore-prefixed names to keep the secret material off
         # the public attribute surface (vault_addr / mount_point remain public).
-        self._vault_token = vault_token or config.get("vault_token")
-        self._vault_role_id = vault_role_id or config.get("vault_role_id")
-        self._vault_secret_id = vault_secret_id or config.get("vault_secret_id")
+        self._vault_token = vault_token if vault_token is not None else config.get("vault_token")
+        self._vault_role_id = vault_role_id if vault_role_id is not None else config.get("vault_role_id")
+        self._vault_secret_id = vault_secret_id if vault_secret_id is not None else config.get("vault_secret_id")
 
         # Token and AppRole are mutually exclusive
         if self._vault_token and (self._vault_role_id or self._vault_secret_id):
@@ -104,8 +104,7 @@ class VaultBackend(BaseSecretBackend):
                 config["vault_secret_id"] = vault_secret_id
                 config["vault_token"] = None
 
-            if vault_url:
-                config["vault_addr"] = vault_url
+            config["vault_addr"] = self.vault_addr
 
             save_config(config)
 
@@ -182,6 +181,8 @@ class VaultBackend(BaseSecretBackend):
                 raise VaultAuthError(f"Vault token is invalid or has expired: {e}") from e
         except (hvac.exceptions.VaultDown, requests.ConnectionError, requests.Timeout, ConnectionError, OSError) as e:
             raise VaultConnectionError(f"Cannot reach Vault at {self.vault_addr}: {e}") from e
+        except VaultAuthError:
+            raise
         except Exception as e:
             # Broad catch is intentional: we don't want a transient lookup
             # failure to break the actual user operation that follows. Include
@@ -237,11 +238,11 @@ class VaultBackend(BaseSecretBackend):
                 path=name,
                 mount_point=self.mount_point,
             )
-        data = response["data"]["data"]
-        if data is None:
-            raise VaultSecretNotFoundError(
-                f"Secret '{name}' is soft-deleted. Restore it with undelete_secret_versions() first."
-            )
+            data = response["data"]["data"]
+            if data is None:
+                raise VaultSecretNotFoundError(
+                    f"Secret '{name}' is soft-deleted. Restore it with undelete_secret_versions() first."
+                )
         return data  # type: ignore[no-any-return]
 
     def update_secret(self, name: str, secret: Dict[str, Any]) -> None:
@@ -279,15 +280,20 @@ class VaultBackend(BaseSecretBackend):
     # Extra helpers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _mask(val: str) -> str:
+        """Return a masked version of *val* safe for logging or repr."""
+        return val[:4] + "***" if len(val) > 4 else "***"
+
     def get_vault_creds(self) -> Dict[str, str]:
-        """Return the credentials in use by this backend instance."""
+        """Return the credentials in use by this backend instance (values are masked)."""
         creds: Dict[str, str] = {}
         if self._vault_token:
-            creds["vault_token"] = self._vault_token
+            creds["vault_token"] = self._mask(self._vault_token)
         if self._vault_role_id:
-            creds["vault_role_id"] = self._vault_role_id
+            creds["vault_role_id"] = self._mask(self._vault_role_id)
         if self._vault_secret_id:
-            creds["vault_secret_id"] = self._vault_secret_id
+            creds["vault_secret_id"] = self._mask(self._vault_secret_id)
         return creds
 
     def get_config(self) -> Optional[Dict[str, Any]]:

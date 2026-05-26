@@ -157,29 +157,29 @@ def is_vault_cred_valid(vault_token=None, role_id=None, secret_id=None) -> bool:
 def main() -> None:
     _print_banner()
     while True:
-        _section("Main Menu")
-        service_completer = WordCompleter(["keyring", "vault", "env", "exit"], ignore_case=True)
         try:
+            _section("Main Menu")
+            service_completer = WordCompleter(["keyring", "vault", "env", "exit"], ignore_case=True)
             service = _menu_prompt(
                 "<b><ansibrightcyan>▶ Backend</ansibrightcyan></b>"
                 "  <ansiwhite>(keyring / vault / env / exit):</ansiwhite>  ",
                 completer=service_completer,
             )
+
+            if service == "keyring":
+                configure_keyring()
+            elif service == "vault":
+                configure_vault()
+            elif service == "env":
+                configure_env()
+            elif service == "exit":
+                _goodbye()
+                sys.exit(0)
+            else:
+                _error(f"Unknown selection '{service}'. Choose: keyring, vault, env, or exit.")
         except (KeyboardInterrupt, EOFError):
             _goodbye()
             sys.exit(0)
-
-        if service == "keyring":
-            configure_keyring()
-        elif service == "vault":
-            configure_vault()
-        elif service == "env":
-            configure_env()
-        elif service == "exit":
-            _goodbye()
-            sys.exit(0)
-        else:
-            _error(f"Unknown selection '{service}'. Choose: keyring, vault, env, or exit.")
 
 
 def _goodbye() -> None:
@@ -409,9 +409,11 @@ def _vault_action_loop(auth_label: str, vault_token=None, vault_role_id=None, va
             while True:
                 try:
                     num = int(_prompt("<b><ansibrightgreen>  Number of key-value pairs:</ansibrightgreen></b>  "))
+                    if num < 1:
+                        raise ValueError
                     break
                 except ValueError:
-                    _error("Please enter a numeric value.")
+                    _error("Please enter a positive integer.")
 
             for i in range(num):
                 k = _prompt(f"<b><ansibrightgreen>  Key {i + 1}:</ansibrightgreen></b>    ")
@@ -526,12 +528,18 @@ def run_keyring_cli(action: str, service_name: str, name: str, secret: Optional[
     try:
         manager = SecretsManager("keyring", service_name=service_name)
         if action == "add":
+            if secret is None:
+                _error("No secret value provided.")
+                return
             manager.add_secret(name, {name: secret})
             _success(f"Added [bold]{name}[/bold] to keyring service '{service_name}'.")
         elif action == "get":
             result = manager.get_secret(name)
             _print_result_dict(result, title=name)
         elif action == "update":
+            if secret is None:
+                _error("No secret value provided.")
+                return
             manager.update_secret(name, {name: secret})
             _success(f"Updated [bold]{name}[/bold] in keyring service '{service_name}'.")
         elif action == "delete":

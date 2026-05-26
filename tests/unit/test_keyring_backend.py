@@ -50,7 +50,9 @@ def test_get_secret_raises_when_not_found(mocker, mock_logger):
 def test_update_secret_raises_when_not_found(mocker, mock_logger):
     mocker.patch("credential_bridge.backends.keyring.keyring.get_password", return_value=None)
     backend = KeyringBackend(service_name="svc")
-    with pytest.raises(KeyringError, match="does not exist"):
+    # update_secret now delegates to get_secret; the message comes from
+    # KeyringSecretNotFoundError raised by get_secret ("not found").
+    with pytest.raises(KeyringError, match="not found"):
         backend.update_secret("missing", {"x": "y"})
 
 
@@ -110,3 +112,16 @@ def test_list_secrets_raises_keyring_error(mocker, mock_logger):
     backend = KeyringBackend(service_name="svc")
     with pytest.raises(KeyringError, match="not supported"):
         backend.list_secrets()
+
+
+def test_update_secret_merges_keys(mocker, mock_logger):
+    """update_secret merges the supplied dict into the existing one; unmentioned
+    keys must survive the call (Fix K1)."""
+    stored = json.dumps({"a": "1", "b": "2"})
+    # get_password is called by get_secret (inside update_secret) each time
+    mocker.patch("credential_bridge.backends.keyring.keyring.get_password", return_value=stored)
+    mock_set = mocker.patch("credential_bridge.backends.keyring.keyring.set_password")
+    backend = KeyringBackend(service_name="svc")
+    backend.update_secret("mykey", {"b": "new"})
+    expected = json.dumps({"a": "1", "b": "new"})
+    mock_set.assert_called_once_with("svc", "mykey", expected)

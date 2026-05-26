@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import requests
 
+from .exceptions import ConfigurationError
+
 CONFIG_FILE: Path = Path.home() / ".vault_config.json"
 
 logger = logging.getLogger(__name__)
@@ -28,10 +30,13 @@ def save_config(data: Dict[str, Any]) -> None:
     import sys
 
     if sys.platform != "win32":
-        # Write with restricted permissions so only the owner can read the file
-        fd = os.open(str(CONFIG_FILE), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        # Write atomically: open a temp file with restricted permissions, write,
+        # then rename — so a crash never leaves a half-written config file.
+        tmp = str(CONFIG_FILE) + ".tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4)
+        os.replace(tmp, str(CONFIG_FILE))
     else:
         # Windows: NTFS ACLs require win32security; write normally and warn the user
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -49,7 +54,13 @@ def load_config() -> Dict[str, Any]:
     logger.debug("Loading config file...")
     if CONFIG_FILE.exists():
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)  # type: ignore[no-any-return]
+            try:
+                return json.load(f)  # type: ignore[no-any-return]
+            except json.JSONDecodeError as exc:
+                raise ConfigurationError(
+                    f"Config file {CONFIG_FILE} contains invalid JSON: {exc}. "
+                    "Delete it or repair it manually."
+                ) from exc
     return {}
 
 

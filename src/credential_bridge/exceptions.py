@@ -9,6 +9,10 @@ class BackendError(CredentialBridgeError):
     """Base exception for backend-specific errors."""
 
 
+class SecretNotFoundError(BackendError):
+    """Raised when a requested secret does not exist in any backend."""
+
+
 class VaultError(BackendError):
     """General HashiCorp Vault error."""
 
@@ -21,7 +25,7 @@ class VaultConnectionError(VaultError):
     """Cannot reach Vault — bad URL or network issue."""
 
 
-class VaultSecretNotFoundError(VaultError):
+class VaultSecretNotFoundError(SecretNotFoundError, VaultError):
     """A requested secret path does not exist in Vault."""
 
 
@@ -29,7 +33,7 @@ class KeyringError(BackendError):
     """System keyring error."""
 
 
-class KeyringSecretNotFoundError(KeyringError):
+class KeyringSecretNotFoundError(SecretNotFoundError, KeyringError):
     """A requested secret does not exist in the keyring."""
 
 
@@ -41,7 +45,7 @@ class EnvFileError(BackendError):
     """Error reading or writing a .env file."""
 
 
-class EnvFileNotFoundError(EnvFileError):
+class EnvFileNotFoundError(SecretNotFoundError, EnvFileError):
     """A requested key does not exist in the .env file."""
 
 

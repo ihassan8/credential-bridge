@@ -77,6 +77,6 @@ def prompt_secrets_interactive(mask_value: bool = True) -> List[str]:
         key = pt_prompt("  Key   : ", style=_pt_style).strip()
         if not key:
             break
-        value = pt_prompt("  Value : ", style=_pt_style, is_password=mask_value).strip()
+        value = pt_prompt("  Value : ", style=_pt_style, is_password=mask_value)  # no .strip()
         secrets.append(f"{key}={value}")
     return secrets

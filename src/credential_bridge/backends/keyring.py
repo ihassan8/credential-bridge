@@ -65,10 +65,11 @@ class KeyringBackend(BaseSecretBackend):
 
     def update_secret(self, name: str, secret: Dict[str, Any]) -> None:
         try:
-            existing = keyring.get_password(self.service_name, name)
-            if existing is None:
-                raise KeyringSecretNotFoundError(f"Secret '{name}' does not exist — use add_secret() first.")
-            keyring.set_password(self.service_name, name, json.dumps(secret))
+            # get_secret raises KeyringSecretNotFoundError if the key is absent —
+            # let that propagate so callers see the correct exception type.
+            existing_dict = self.get_secret(name)
+            merged = {**existing_dict, **secret}
+            keyring.set_password(self.service_name, name, json.dumps(merged))
             self.logger.info(f"Keyring secret updated: {name}", mask=self.mask)
         except KeyringError:
             raise

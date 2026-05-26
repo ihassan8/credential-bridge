@@ -22,7 +22,11 @@ _VAULT_URL = typer.Option(None, "--vault-url", envvar="VAULT_ADDR", help="Vault 
 _VAULT_TOKEN = typer.Option(None, "--vault-token", envvar="VAULT_TOKEN", help="Vault token")
 _ROLE_ID = typer.Option(None, "--vault-role-id", envvar="VAULT_ROLE_ID", help="AppRole role ID")
 _SECRET_ID = typer.Option(None, "--vault-secret-id", envvar="VAULT_SECRET_ID", help="AppRole secret ID")
-_SERVICE_NAME = typer.Option("default_service", "--service-name", help="Service name (logging tag)")
+_SERVICE_NAME = typer.Option(
+    "default",
+    "--service-name",
+    help="Service name (logging label only — has no effect on secret routing).",
+)
 _MOUNT_POINT = typer.Option(None, "--mount-point", help="Vault KV-v2 mount point (default: current OS username)")
 
 
@@ -44,7 +48,15 @@ def _make_backend(vault_url, vault_token, role_id, secret_id, service_name, moun
 @app.command()
 def add(
     name: str = typer.Argument(..., help="Secret path (e.g. myapp/database)"),
-    secret: Optional[List[str]] = typer.Option(None, "--secret", "-s", help="KEY=value pair (repeatable)"),
+    secret: Optional[List[str]] = typer.Option(
+        None,
+        "--secret",
+        "-s",
+        help=(
+            "KEY=VALUE pairs to store. Caution: values are visible in shell history and process listings. "
+            "Omit to be prompted interactively."
+        ),
+    ),
     vault_url: Optional[str] = _VAULT_URL,
     vault_token: Optional[str] = _VAULT_TOKEN,
     role_id: Optional[str] = _ROLE_ID,
@@ -58,12 +70,12 @@ def add(
     if not secret:
         print_error("At least one KEY=value pair is required.", title="Missing Input")
         raise typer.Exit(1)
-    backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
     try:
         secret_dict = parse_secrets(secret)
     except ValueError as e:
         print_error(str(e), title="Bad Input")
         raise typer.Exit(1)
+    backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
     try:
         backend.add_secret(name, secret_dict)
         print_success(f"Secret [bold]{name}[/bold] added.")
@@ -84,6 +96,9 @@ def get(
     output: str = typer.Option("rich", "--output", "-o", help="Output format: rich (default) or json"),
 ):
     """Retrieve a secret from Vault."""
+    if output not in ("rich", "json"):
+        print_error(f"Unknown output format '{output}'. Valid options: rich, json.")
+        raise typer.Exit(1)
     backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
     try:
         result = backend.get_secret(name)
@@ -99,7 +114,15 @@ def get(
 @app.command()
 def update(
     name: str = typer.Argument(..., help="Secret path"),
-    secret: Optional[List[str]] = typer.Option(None, "--secret", "-s", help="KEY=value pair (repeatable)"),
+    secret: Optional[List[str]] = typer.Option(
+        None,
+        "--secret",
+        "-s",
+        help=(
+            "KEY=VALUE pairs to store. Caution: values are visible in shell history and process listings. "
+            "Omit to be prompted interactively."
+        ),
+    ),
     vault_url: Optional[str] = _VAULT_URL,
     vault_token: Optional[str] = _VAULT_TOKEN,
     role_id: Optional[str] = _ROLE_ID,
@@ -113,12 +136,12 @@ def update(
     if not secret:
         print_error("At least one KEY=value pair is required.", title="Missing Input")
         raise typer.Exit(1)
-    backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
     try:
         secret_dict = parse_secrets(secret)
     except ValueError as e:
         print_error(str(e), title="Bad Input")
         raise typer.Exit(1)
+    backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
     try:
         backend.update_secret(name, secret_dict)
         print_success(f"Secret [bold]{name}[/bold] updated.")
@@ -140,7 +163,9 @@ def delete(
 ):
     """Permanently delete a Vault secret and all its versions."""
     if not confirm:
-        typer.confirm(f"Delete secret '{name}' and ALL versions?", abort=True)
+        if not typer.confirm(f"Delete secret '{name}'? This cannot be undone."):
+            print_success("Deletion cancelled.")
+            raise typer.Exit(0)
     backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
     try:
         backend.delete_secret(name)
@@ -159,12 +184,19 @@ def list_secrets(
     secret_id: Optional[str] = _SECRET_ID,
     service_name: str = _SERVICE_NAME,
     mount_point: str = _MOUNT_POINT,
+    output: str = typer.Option("rich", "--output", "-o", help="Output format: rich or json."),
 ):
     """List secrets at a Vault path."""
+    if output not in ("rich", "json"):
+        print_error(f"Unknown output format '{output}'. Valid options: rich, json.")
+        raise typer.Exit(1)
     backend = _make_backend(vault_url, vault_token, role_id, secret_id, service_name, mount_point)
     try:
         keys = backend.list_secrets(path)
-        print_table(keys, title=f"Secrets at '{path or '/'}'")
+        if output == "json":
+            typer.echo(json.dumps(keys))
+        else:
+            print_table(keys, title=f"Secrets at '{path or '/'}'")
     except CredentialBridgeError as e:
         print_error(str(e))
         raise typer.Exit(1)

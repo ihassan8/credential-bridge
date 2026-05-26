@@ -285,6 +285,53 @@ def test_add_secret_raises_if_group_name_already_exists(tmp_path):
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Fix E1: _quote_value must not bypass pre-formatted strings
+# ---------------------------------------------------------------------------
+
+
+def test_quote_value_does_not_bypass_preformatted_string(tmp_path):
+    """A value that starts and ends with '"' but contains '$' must still be
+    escaped rather than returned as-is (Fix E1: removed early-exit guard)."""
+    from credential_bridge.backends.env_file import _quote_value
+
+    raw = '"hello $WORLD"'
+    result = _quote_value(raw)
+    # The result must be double-quoted and the $ must be preserved inside the
+    # outer quotes. Because the value itself contains '"', the inner quotes are
+    # escaped as \" and the dollar sign is kept literal inside the outer quotes.
+    assert result.startswith('"')
+    assert result.endswith('"')
+    # The dollar sign must not be interpreted as a shell variable — the value
+    # should appear somewhere in the quoted output.
+    assert "$WORLD" in result
+
+
+# ---------------------------------------------------------------------------
+# Fix E2: _keys_for_group must not stop at inline #comment lines
+# ---------------------------------------------------------------------------
+
+
+def test_keys_for_group_stops_at_group_header_not_inline_comment(tmp_path):
+    """A disabled-key comment line like '#KEY=val' inside a group must NOT
+    terminate the key scan; keys after it must still be returned (Fix E2)."""
+    env_file = tmp_path / ".env"
+    # Write a group with a disabled-key comment in the middle
+    env_file.write_text(
+        "\n# mygroup\n"
+        "FIRST=1\n"
+        "#DISABLED=ignored\n"
+        "SECOND=2\n",
+        encoding="utf-8",
+    )
+    backend = EnvFileBackend(path=env_file)
+    result = backend.get_secret("mygroup")
+    assert "FIRST" in result
+    assert "SECOND" in result
+    assert result["FIRST"] == "1"
+    assert result["SECOND"] == "2"
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX file permissions not enforced on Windows")
 def test_tmp_file_created_with_restricted_permissions(tmp_path, mocker):
     """The .env.tmp file must be created with 0o600 permissions so that

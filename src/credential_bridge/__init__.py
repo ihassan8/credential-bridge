@@ -12,12 +12,14 @@ from .exceptions import (
     KeyringError,
     KeyringKeyExistsError,
     KeyringSecretNotFoundError,
+    SecretNotFoundError,
     VaultAuthError,
     VaultConnectionError,
     VaultError,
     VaultSecretNotFoundError,
 )
-from .manager import SecretsManager
+from .manager import SecretsManager, register_backend
+from .utils import get_session, get_vault_credentials
 
 # Backwards-compatibility aliases
 VaultManager = VaultBackend
@@ -26,12 +28,14 @@ KeyringManager = KeyringBackend
 __all__ = [
     "__version__",
     "SecretsManager",
+    "register_backend",
     "BaseSecretBackend",
     "VaultBackend",
     "KeyringBackend",
     "EnvFileBackend",
     "CredentialBridgeError",
     "BackendError",
+    "SecretNotFoundError",
     "VaultError",
     "VaultAuthError",
     "VaultConnectionError",
@@ -46,4 +50,6 @@ __all__ = [
     "ConfigurationError",
     "VaultManager",
     "KeyringManager",
+    "get_session",
+    "get_vault_credentials",
 ]

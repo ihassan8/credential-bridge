@@ -45,9 +45,15 @@ def root_callback(
 @app.command()
 def wizard():
     """Launch the interactive secrets wizard."""
-    from ..prompt_wizard import main as _wizard_main
-
-    _wizard_main()
+    try:
+        from ..prompt_wizard import main as _wizard_main
+        _wizard_main()
+    except (KeyboardInterrupt, EOFError):
+        raise typer.Exit(0)
+    except Exception as e:
+        from ._output import print_error
+        print_error(str(e), title="Wizard Error")
+        raise typer.Exit(1)
 
 
 def main():

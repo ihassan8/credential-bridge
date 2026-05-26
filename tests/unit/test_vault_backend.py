@@ -397,7 +397,8 @@ def test_get_secret_raises_on_soft_deleted_secret(mock_hvac):
 
 def test_get_vault_creds_token(mock_hvac):
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
-    assert backend.get_vault_creds() == {"vault_token": "s.test"}
+    # "s.test" is 6 chars: first 4 + "***"
+    assert backend.get_vault_creds() == {"vault_token": "s.te***"}
 
 
 def test_get_vault_creds_approle(mocker):
@@ -413,4 +414,57 @@ def test_get_vault_creds_approle(mocker):
         vault_role_id="my-role",
         vault_secret_id="my-secret",
     )
-    assert backend.get_vault_creds() == {"vault_role_id": "my-role", "vault_secret_id": "my-secret"}
+    # "my-role" → "my-r***", "my-secret" → "my-s***"
+    assert backend.get_vault_creds() == {"vault_role_id": "my-r***", "vault_secret_id": "my-s***"}
+
+
+# ---------------------------------------------------------------------------
+# Fix 3: get_secret raises VaultError on malformed response
+# ---------------------------------------------------------------------------
+
+
+def test_get_secret_raises_vault_error_on_malformed_response(mock_hvac):
+    """read_secret returning a response without the inner 'data' key raises VaultError."""
+    from credential_bridge.exceptions import VaultError
+
+    mock_hvac.secrets.kv.v2.read_secret.return_value = {"data": {}}  # missing inner "data"
+    backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
+    with pytest.raises(VaultError):
+        backend.get_secret("myapp/db")
+
+
+# ---------------------------------------------------------------------------
+# Fix 4: _refresh_token_if_needed re-raises VaultAuthError
+# ---------------------------------------------------------------------------
+
+
+def test_refresh_token_reraises_vault_auth_error(mock_hvac):
+    """VaultAuthError raised during token lookup must propagate, not be swallowed."""
+    mock_hvac.auth.token.lookup_self.side_effect = VaultAuthError("token invalid")
+    backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
+    with pytest.raises(VaultAuthError, match="token invalid"):
+        backend._refresh_token_if_needed()
+
+
+# ---------------------------------------------------------------------------
+# Fix 5: persist=True saves the resolved URL even when resolved from env var
+# ---------------------------------------------------------------------------
+
+
+def test_persist_saves_resolved_url_from_env(mocker):
+    """persist=True must write vault_addr from the resolved self.vault_addr, not the arg."""
+    client = MagicMock()
+    client.is_authenticated.return_value = True
+    client.auth.token.lookup_self.return_value = {"data": {"ttl": 3600}}
+    mocker.patch("credential_bridge.backends.vault.hvac.Client", return_value=client)
+    mocker.patch("credential_bridge.backends.vault.load_config", return_value={})
+    mock_save = mocker.patch("credential_bridge.backends.vault.save_config")
+    mocker.patch.dict("os.environ", {"VAULT_ADDR": "https://env.vault.com"})
+
+    # No vault_url arg — address must come from VAULT_ADDR env var
+    VaultBackend(vault_token="s.t", persist=True)
+
+    mock_save.assert_called_once()
+    saved_config = mock_save.call_args[0][0]
+    assert "vault_addr" in saved_config
+    assert saved_config["vault_addr"] == "https://env.vault.com"

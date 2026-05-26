@@ -52,3 +52,24 @@ def test_update_command_malformed_secret_exits_with_error(mock_keyring_backend):
     result = runner.invoke(app, ["update", "mykey", "--secret", "BADFORMAT", "--service-name", "svc"])
     assert result.exit_code == 1
     mock_keyring_backend.update_secret.assert_not_called()
+
+
+def test_list_not_supported(mock_keyring_backend):
+    """list command should exit 1 with an informative error message."""
+    result = runner.invoke(app, ["list"])
+    assert result.exit_code == 1
+    assert "not supported" in result.output.lower() or "Unsupported" in result.output
+
+
+def test_delete_cancelled_exits_zero(mock_keyring_backend):
+    """Cancelling a delete confirmation should exit 0 (not 1)."""
+    result = runner.invoke(app, ["delete", "mykey", "--service-name", "svc"], input="n\n")
+    assert result.exit_code == 0
+    mock_keyring_backend.delete_secret.assert_not_called()
+
+
+def test_get_invalid_output_format(mock_keyring_backend):
+    """An unknown --output value should exit 1 before calling the backend."""
+    result = runner.invoke(app, ["get", "mykey", "--output", "xml", "--service-name", "svc"])
+    assert result.exit_code == 1
+    mock_keyring_backend.get_secret.assert_not_called()

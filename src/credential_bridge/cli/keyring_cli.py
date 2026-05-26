@@ -16,7 +16,14 @@ _SERVICE = typer.Option("default", "--service-name", "-s", help="Keyring service
 @app.command()
 def add(
     name: str = typer.Argument(..., help="Secret key name"),
-    secret: Optional[List[str]] = typer.Option(None, "--secret", help="KEY=value pair (repeatable)"),
+    secret: Optional[List[str]] = typer.Option(
+        None,
+        "--secret",
+        help=(
+            "KEY=VALUE pairs to store. Caution: values are visible in shell history and process listings. "
+            "Omit to be prompted interactively."
+        ),
+    ),
     service_name: str = _SERVICE,
 ):
     """Add a secret to the system keyring."""
@@ -46,6 +53,9 @@ def get(
     output: str = typer.Option("rich", "--output", "-o", help="Output format: rich or json"),
 ):
     """Retrieve a secret from the system keyring."""
+    if output not in ("rich", "json"):
+        print_error(f"Unknown output format '{output}'. Valid options: rich, json.")
+        raise typer.Exit(1)
     backend = KeyringBackend(service_name=service_name)
     try:
         result = backend.get_secret(name)
@@ -61,7 +71,14 @@ def get(
 @app.command()
 def update(
     name: str = typer.Argument(..., help="Secret key name"),
-    secret: Optional[List[str]] = typer.Option(None, "--secret", help="KEY=value pair (repeatable)"),
+    secret: Optional[List[str]] = typer.Option(
+        None,
+        "--secret",
+        help=(
+            "KEY=VALUE pairs to store. Caution: values are visible in shell history and process listings. "
+            "Omit to be prompted interactively."
+        ),
+    ),
     service_name: str = _SERVICE,
 ):
     """Update an existing keyring secret."""
@@ -92,7 +109,9 @@ def delete(
 ):
     """Delete a secret from the system keyring."""
     if not confirm:
-        typer.confirm(f"Delete secret '{name}'?", abort=True)
+        if not typer.confirm(f"Delete secret '{name}'? This cannot be undone."):
+            print_success("Deletion cancelled.")
+            raise typer.Exit(0)
     backend = KeyringBackend(service_name=service_name)
     try:
         backend.delete_secret(name)
@@ -100,6 +119,19 @@ def delete(
     except CredentialBridgeError as e:
         print_error(str(e))
         raise typer.Exit(1)
+
+
+@app.command(name="list")
+def list_secrets(
+    service_name: str = typer.Option("default", "--service-name", "-s", help="Service namespace."),
+) -> None:
+    """List secrets (not supported — system keyring backends do not expose enumeration APIs)."""
+    print_error(
+        "list is not supported by the system keyring backend. "
+        "Windows Credential Manager and macOS Keychain do not expose enumeration APIs.",
+        title="Unsupported Operation",
+    )
+    raise typer.Exit(1)
 
 
 def main():

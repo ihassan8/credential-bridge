@@ -1,4 +1,5 @@
 # src/credential_bridge/manager.py
+import threading
 from typing import Any, Dict, List, Type
 
 from .backends.base import BaseSecretBackend
@@ -6,6 +7,8 @@ from .backends.env_file import EnvFileBackend
 from .backends.keyring import KeyringBackend
 from .backends.vault import VaultBackend
 from .exceptions import BackendNotRegisteredError
+
+_registry_lock = threading.Lock()
 
 
 class SecretsManager:
@@ -15,8 +18,13 @@ class SecretsManager:
 
     @classmethod
     def register_backend(cls, name: str, backend_cls: Type[BaseSecretBackend]) -> None:
-        """Register a backend class under a name."""
-        cls._registry[name] = backend_cls
+        """Register a backend class under *name*.
+
+        Thread-safe. Registering backends at module load time (import time) is
+        strongly recommended to avoid contention in multi-threaded applications.
+        """
+        with _registry_lock:
+            cls._registry[name] = backend_cls
 
     def __init__(self, backend: str, **kwargs: Any) -> None:
         if backend not in self._registry:
@@ -71,3 +79,7 @@ class SecretsManager:
 SecretsManager.register_backend("vault", VaultBackend)
 SecretsManager.register_backend("keyring", KeyringBackend)
 SecretsManager.register_backend("env", EnvFileBackend)
+
+# Module-level alias so callers can do:
+#   from credential_bridge.manager import register_backend
+register_backend = SecretsManager.register_backend

@@ -16,7 +16,15 @@ _PATH = typer.Option(".env", "--path", "-p", help="Path to the .env file (defaul
 @app.command()
 def add(
     name: str = typer.Argument(..., help="Group label / key name"),
-    secret: Optional[List[str]] = typer.Option(None, "--secret", "-s", help="KEY=value pair (repeatable)"),
+    secret: Optional[List[str]] = typer.Option(
+        None,
+        "--secret",
+        "-s",
+        help=(
+            "KEY=VALUE pairs to store. Caution: values are visible in shell history and process listings. "
+            "Omit to be prompted interactively."
+        ),
+    ),
     path: str = _PATH,
 ):
     """Add a secret to the .env file."""
@@ -46,6 +54,9 @@ def get(
     output: str = typer.Option("rich", "--output", "-o", help="Output format: rich or json"),
 ):
     """Get a secret from the .env file."""
+    if output not in ("rich", "json"):
+        print_error(f"Unknown output format '{output}'. Valid options: rich, json.")
+        raise typer.Exit(1)
     backend = EnvFileBackend(path=path)
     try:
         result = backend.get_secret(name)
@@ -61,7 +72,15 @@ def get(
 @app.command()
 def update(
     name: str = typer.Argument(..., help="Env var key name"),
-    secret: Optional[List[str]] = typer.Option(None, "--secret", "-s", help="KEY=value pair (repeatable)"),
+    secret: Optional[List[str]] = typer.Option(
+        None,
+        "--secret",
+        "-s",
+        help=(
+            "KEY=VALUE pairs to store. Caution: values are visible in shell history and process listings. "
+            "Omit to be prompted interactively."
+        ),
+    ),
     path: str = _PATH,
 ):
     """Update a secret in the .env file."""
@@ -92,7 +111,9 @@ def delete(
 ):
     """Delete a secret from the .env file."""
     if not confirm:
-        typer.confirm(f"Delete '{name}' from {path}?", abort=True)
+        if not typer.confirm(f"Delete secret '{name}'? This cannot be undone."):
+            print_success("Deletion cancelled.")
+            raise typer.Exit(0)
     backend = EnvFileBackend(path=path)
     try:
         backend.delete_secret(name)
@@ -108,6 +129,9 @@ def list_secrets(
     output: str = typer.Option("rich", "--output", "-o", help="Output format: rich or json"),
 ):
     """List all keys in the .env file."""
+    if output not in ("rich", "json"):
+        print_error(f"Unknown output format '{output}'. Valid options: rich, json.")
+        raise typer.Exit(1)
     backend = EnvFileBackend(path=path)
     try:
         keys = backend.list_secrets()

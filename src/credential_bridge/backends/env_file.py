@@ -1,5 +1,6 @@
 # src/credential_bridge/backends/env_file.py
 import os
+import re
 import sys
 import warnings
 from contextlib import contextmanager
@@ -13,17 +14,21 @@ from filelock import FileLock, Timeout
 from ..exceptions import EnvFileError, EnvFileKeyExistsError, EnvFileNotFoundError
 from .base import BaseSecretBackend
 
+# Matches only the comment-header lines that add_secret writes:
+# a single '#', one space, then a single non-space token (no '=').
+# This distinguishes real group headers from disabled-key comments like
+# '#KEY=val' or hand-written inline annotations.
+_GROUP_HEADER_RE = re.compile(r"^# \S+$")
+
 
 def _quote_value(value: str) -> str:
-    """Quote a .env value if it contains spaces or special characters."""
-    # Already properly quoted — same quote char opens and closes with no unescaped inner match
-    if len(value) >= 2:
-        for q in ('"', "'"):
-            if value[0] == q and value[-1] == q:
-                inner = value[1:-1]
-                if q not in inner:
-                    return value
-                break
+    """Quote a .env value if it contains spaces or special characters.
+
+    All values are treated uniformly — there is no early exit for strings
+    that appear to already be quoted. A caller passing ``'"hello $WORLD"'``
+    as a literal value should have that dollar sign escaped, which the
+    early-return guard previously prevented.
+    """
     # Needs quoting if contains spaces or special chars
     if any(c in value for c in (" ", "\t", "\n", "\r", "#", '"', "'", "\\", "$", "`")):
         escaped = value.replace("\\", "\\\\").replace('"', '\\"')
@@ -100,13 +105,12 @@ class EnvFileBackend(BaseSecretBackend):
     def _keys_for_group(self, group_name: str, lines: Optional[List[str]] = None) -> List[str]:
         """Return env-var keys that appear under a '# group_name' comment block.
 
-        Note: enumeration stops at the next comment line of any kind, including
-        inline annotations the user may have added by hand. The library only
-        writes group-header comments via add_secret, so this assumption holds
-        for files managed exclusively through credential-bridge. If a file has
-        been hand-edited to add comments inside a group, keys after the
-        annotation will not be returned and won't be cleaned up by
-        delete_secret(group_name).
+        Enumeration stops only when another group-header comment is encountered
+        (a line matching ``_GROUP_HEADER_RE``). Lines like ``#KEY=val`` (disabled
+        keys) or ``# inline note with spaces`` are treated as regular non-key
+        lines and do NOT terminate the scan, so keys after them are still
+        returned. This is safe because ``add_secret`` exclusively writes
+        group headers of the form ``# <single-token>``.
         """
         if lines is None:
             lines = self._read_lines()
@@ -118,9 +122,9 @@ class EnvFileBackend(BaseSecretBackend):
                 in_group = True
                 continue
             if in_group:
-                if stripped.startswith("#"):
+                if _GROUP_HEADER_RE.match(stripped) and stripped != f"# {group_name}":
                     break
-                if "=" in stripped:
+                if "=" in stripped and not stripped.startswith("#"):
                     result.append(stripped.split("=", 1)[0].strip())
         return result
 
@@ -164,9 +168,16 @@ class EnvFileBackend(BaseSecretBackend):
                 self._sync_environ({k: str(v) for k, v in secret.items()})
 
     def get_secret(self, name: str) -> Dict[str, Any]:
-        # Unlocked: a single os-level file read is already atomic relative to
-        # os.replace writes, so a concurrent writer never exposes a partial
-        # file. Taking the lock here would serialize all reads for no benefit.
+        """Retrieve a secret or group of secrets from the .env file.
+
+        All returned values are strings because env files are text-only.
+        Callers relying on backend-agnostic code should cast numeric or
+        boolean values explicitly (e.g. ``int(result["PORT"])``).
+
+        Note: Unlocked — a single os-level file read is already atomic relative
+        to os.replace writes, so a concurrent writer never exposes a partial
+        file. Taking the lock here would serialize all reads for no benefit.
+        """
         lines = self._read_lines()
         keys = self._parse_lines(lines)
         if name in keys:
@@ -178,11 +189,14 @@ class EnvFileBackend(BaseSecretBackend):
 
     def update_secret(self, name: str, secret: Dict[str, Any]) -> None:
         with self._locked():
-            existing = self._current_keys()
+            # Single read — reuse for both the key-existence check and the
+            # line-by-line replacement loop (Fix E4: eliminates the double read
+            # that _current_keys() + _read_lines() previously caused).
+            lines = self._read_lines()
+            existing = self._parse_lines(lines)
             missing = [k for k in secret if k not in existing]
             if missing:
                 raise EnvFileNotFoundError(f"Key(s) {missing} not found in {self.path}. Use add_secret() first.")
-            lines = self._read_lines()
             updated: Dict[str, str] = {}
             new_lines = []
             for line in lines:
@@ -224,11 +238,20 @@ class EnvFileBackend(BaseSecretBackend):
                 # have a blank separator before them. Top-of-file or inline comments that lack
                 # this blank line are left untouched.
                 comment_idx = None
+                blank_count = 0
                 for i in range(key_idx - 1, -1, -1):
                     s = lines[i].strip()
                     if not s:
+                        blank_count += 1
+                        if blank_count > 1:
+                            # More than one blank line — cannot be our group header
+                            break
                         continue
-                    if s.startswith("#") and i > 0 and not lines[i - 1].strip():
+                    # First non-blank line above the key: must be a valid group
+                    # header (matches _GROUP_HEADER_RE) preceded by at most one
+                    # blank line. Top-of-file headers (i == 0) are also accepted
+                    # when they match the pattern.
+                    if _GROUP_HEADER_RE.match(s):
                         comment_idx = i
                     break
                 if comment_idx is not None:

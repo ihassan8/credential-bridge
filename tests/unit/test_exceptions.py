@@ -84,3 +84,32 @@ def test_keyring_key_exists_error_exported_from_package():
     from credential_bridge import KeyringKeyExistsError
 
     assert KeyringKeyExistsError is not None
+
+
+def test_not_found_exceptions_catchable_as_secret_not_found_error():
+    """Fix X4: all three 'not found' exceptions must be catchable as SecretNotFoundError."""
+    from credential_bridge.exceptions import (
+        EnvFileNotFoundError,
+        KeyringSecretNotFoundError,
+        SecretNotFoundError,
+        VaultSecretNotFoundError,
+    )
+
+    for exc_cls in (VaultSecretNotFoundError, KeyringSecretNotFoundError, EnvFileNotFoundError):
+        assert issubclass(exc_cls, SecretNotFoundError), (
+            f"{exc_cls.__name__} should be a subclass of SecretNotFoundError"
+        )
+        with pytest.raises(SecretNotFoundError):
+            raise exc_cls("not found")
+
+
+def test_secret_not_found_error_is_backend_error():
+    from credential_bridge.exceptions import BackendError, SecretNotFoundError
+
+    assert issubclass(SecretNotFoundError, BackendError)
+
+
+def test_secret_not_found_error_exported_from_package():
+    from credential_bridge import SecretNotFoundError
+
+    assert SecretNotFoundError is not None

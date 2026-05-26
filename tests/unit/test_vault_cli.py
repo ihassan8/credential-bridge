@@ -142,3 +142,78 @@ def test_update_command_malformed_secret_exits_with_error(mock_vault_backend):
     )
     assert result.exit_code == 1
     mock_vault_backend.update_secret.assert_not_called()
+
+
+def test_delete_cancelled_exits_zero(mock_vault_backend):
+    """Cancelling a delete confirmation should exit 0 (not 1)."""
+    result = runner.invoke(
+        app,
+        [
+            "delete",
+            "myapp/db",
+            "--vault-url",
+            "https://vault.example.com",
+            "--vault-token",
+            "s.test",
+        ],
+        input="n\n",
+    )
+    assert result.exit_code == 0
+    mock_vault_backend.delete_secret.assert_not_called()
+
+
+def test_list_output_json(mock_vault_backend):
+    """list --output json should emit a JSON array."""
+    mock_vault_backend.list_secrets.return_value = ["key1", "key2"]
+    result = runner.invoke(
+        app,
+        [
+            "list",
+            "--output",
+            "json",
+            "--vault-url",
+            "https://vault.example.com",
+            "--vault-token",
+            "s.test",
+        ],
+    )
+    assert result.exit_code == 0
+    import json
+    assert json.loads(result.output) == ["key1", "key2"]
+
+
+def test_get_invalid_output_format(mock_vault_backend):
+    """An unknown --output value should exit 1 before calling the backend."""
+    result = runner.invoke(
+        app,
+        [
+            "get",
+            "myapp/db",
+            "--output",
+            "xml",
+            "--vault-url",
+            "https://vault.example.com",
+            "--vault-token",
+            "s.test",
+        ],
+    )
+    assert result.exit_code == 1
+    mock_vault_backend.get_secret.assert_not_called()
+
+
+def test_list_invalid_output_format(mock_vault_backend):
+    """An unknown --output value on list should exit 1 before calling the backend."""
+    result = runner.invoke(
+        app,
+        [
+            "list",
+            "--output",
+            "yaml",
+            "--vault-url",
+            "https://vault.example.com",
+            "--vault-token",
+            "s.test",
+        ],
+    )
+    assert result.exit_code == 1
+    mock_vault_backend.list_secrets.assert_not_called()

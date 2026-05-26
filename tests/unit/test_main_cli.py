@@ -27,3 +27,17 @@ def test_cb_root_help():
     assert "vault" in result.output
     assert "keyring" in result.output
     assert "env" in result.output
+
+
+def test_wizard_keyboard_interrupt_exits_zero(mocker):
+    """KeyboardInterrupt during wizard should exit with code 0."""
+    mocker.patch("credential_bridge.prompt_wizard.main", side_effect=KeyboardInterrupt)
+    result = runner.invoke(app, ["wizard"])
+    assert result.exit_code == 0
+
+
+def test_wizard_exception_exits_one(mocker):
+    """Unexpected exceptions from the wizard should exit with code 1."""
+    mocker.patch("credential_bridge.prompt_wizard.main", side_effect=RuntimeError("boom"))
+    result = runner.invoke(app, ["wizard"])
+    assert result.exit_code == 1

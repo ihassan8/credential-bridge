@@ -92,3 +92,24 @@ def test_update_command_interactive_masks_secret_input(mocker, mock_env_backend)
     assert kwargs.get("mask_value") is not False, (
         "env-cli update called prompt_secrets_interactive with mask_value=False"
     )
+
+
+def test_delete_cancelled_exits_zero(mock_env_backend):
+    """Cancelling a delete confirmation should exit 0 (not 1)."""
+    result = runner.invoke(app, ["delete", "DB_HOST"], input="n\n")
+    assert result.exit_code == 0
+    mock_env_backend.delete_secret.assert_not_called()
+
+
+def test_get_invalid_output_format(mock_env_backend):
+    """An unknown --output value on get should exit 1 before calling the backend."""
+    result = runner.invoke(app, ["get", "DB_HOST", "--output", "xml"])
+    assert result.exit_code == 1
+    mock_env_backend.get_secret.assert_not_called()
+
+
+def test_list_invalid_output_format(mock_env_backend):
+    """An unknown --output value on list should exit 1 before calling the backend."""
+    result = runner.invoke(app, ["list", "--output", "yaml"])
+    assert result.exit_code == 1
+    mock_env_backend.list_secrets.assert_not_called()

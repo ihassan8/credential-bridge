@@ -83,3 +83,33 @@ def test_delete_secret_delegates(mocker):
     mock_del = mocker.patch.object(sm._backend, "delete_secret")
     sm.delete_secret("name")
     mock_del.assert_called_once_with("name")
+
+
+def test_register_backend_importable():
+    """register_backend must be importable from credential_bridge.manager (Fix X1)."""
+    from credential_bridge.manager import register_backend  # noqa: F401 — import is the test
+
+    assert callable(register_backend)
+
+    # Calling it should register the backend in SecretsManager._registry.
+    class AnotherFakeBackend(BaseSecretBackend):
+        backend_name = "another_fake"
+
+        def add_secret(self, name, secret):
+            pass
+
+        def get_secret(self, name):
+            return {}
+
+        def update_secret(self, name, secret):
+            pass
+
+        def delete_secret(self, name):
+            pass
+
+        def list_secrets(self, path=""):
+            return []
+
+    register_backend("another_fake", AnotherFakeBackend)
+    assert "another_fake" in SecretsManager._registry
+    assert SecretsManager._registry["another_fake"] is AnotherFakeBackend
