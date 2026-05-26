@@ -388,3 +388,29 @@ def test_get_secret_raises_on_soft_deleted_secret(mock_hvac):
     backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
     with pytest.raises(VaultSecretNotFoundError, match="soft-deleted"):
         backend.get_secret("myapp/db")
+
+
+# ---------------------------------------------------------------------------
+# get_vault_creds
+# ---------------------------------------------------------------------------
+
+
+def test_get_vault_creds_token(mock_hvac):
+    backend = VaultBackend(vault_url="https://vault.example.com", vault_token="s.test")
+    assert backend.get_vault_creds() == {"vault_token": "s.test"}
+
+
+def test_get_vault_creds_approle(mocker):
+    client = MagicMock()
+    client.auth.approle.login.return_value = {"auth": {"client_token": "s.approle"}}
+    client.auth.token.lookup_self.return_value = {"data": {"ttl": 3600}}
+    mocker.patch("credential_bridge.backends.vault.hvac.Client", return_value=client)
+    mocker.patch("credential_bridge.backends.vault.load_config", return_value={})
+    mocker.patch("credential_bridge.backends.vault.save_config")
+
+    backend = VaultBackend(
+        vault_url="https://vault.example.com",
+        vault_role_id="my-role",
+        vault_secret_id="my-secret",
+    )
+    assert backend.get_vault_creds() == {"vault_role_id": "my-role", "vault_secret_id": "my-secret"}

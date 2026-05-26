@@ -56,7 +56,10 @@ Dependencies live in three separate files, not in `pyproject.toml` directly: `re
 
 ## Tests
 
-`tests/unit/` mirrors `src/credential_bridge/` 1:1 (`test_<module>.py` per source module). `tests/integration/` is gated by the `integration` pytest marker and may require a running Vault server. `tests/conftest.py` defines the autouse `clean_registry` fixture that snapshots and restores `SecretsManager._registry` around each test — required because the registry is class-level state.
+`tests/unit/` mirrors `src/credential_bridge/` 1:1 (`test_<module>.py` per source module). `tests/integration/` is gated by the `integration` pytest marker and may require a running Vault server. `tests/conftest.py` defines three fixtures:
+- `clean_registry` (autouse): snapshots and restores `SecretsManager._registry` around each test — required because the registry is class-level state.
+- `tmp_env_file`: a `Path` to a not-yet-created `.env` file in a temp directory.
+- `populated_env_file`: a `.env` file pre-seeded with `EXISTING_KEY=existing_value`.
 
 ## Architecture
 
@@ -91,7 +94,7 @@ src/credential_bridge/
 - `EnvFileBackend.update_secret` raises `EnvFileNotFoundError` (not the base `EnvFileError`) when keys are missing, consistent with `delete_secret`.
 - All logging goes through `PyLogShield` for sensitive data masking. Both `VaultBackend` and `KeyringBackend` accept an optional `logger: PyLogShield` parameter.
 - TLS verification is enabled by default (`verify=True`). Pass `cert="/path/to/ca.pem"` for custom CA bundles.
-- `get_session()` sets `trust_env = False` — the requests session does NOT pick up system proxy env vars unless `proxies` is explicitly passed.
+- `verify` and `proxies` are passed directly to `hvac.Client` — no intermediate `requests.Session` is created. Users who need `trust_env=False` or other session-level config should manage their own session at the project level.
 - `KeyringBackend.list_secrets()` always raises `KeyringError`; Windows Credential Manager and macOS Keychain don't expose enumeration APIs.
 - `EnvFileBackend.add_secret(name, {...})` writes a `# name` comment block above the key-value pairs. `get_secret(name)` resolves either a single key or all keys under a matching comment block.
 - `EnvFileBackend(load_into_environ=True)` syncs written/updated values into `os.environ` immediately.
@@ -150,7 +153,7 @@ git push origin 1.2.1
 
 Push to `main` (without a tag) deploys docs only. The tag format must be `X.Y.Z` (no `v` prefix).
 
-CI runs on Python 3.10, 3.11, and 3.12 across Ubuntu and Windows. `pip-audit` runs in CI as a separate audit job — keep dependencies free of known CVEs.
+CI runs on Python 3.8, 3.9, 3.10, 3.11, and 3.12 across Ubuntu and Windows. `pip-audit` runs in CI as a separate audit job — keep dependencies free of known CVEs.
 
 ## Docs
 

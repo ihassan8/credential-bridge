@@ -16,7 +16,7 @@ from ..exceptions import (
     VaultError,
     VaultSecretNotFoundError,
 )
-from ..utils import get_session, load_config, save_config
+from ..utils import load_config, save_config
 from .base import BaseSecretBackend
 
 
@@ -76,8 +76,6 @@ class VaultBackend(BaseSecretBackend):
             raise ConfigurationError("logger must be a PyLogShield instance. Use: from pylogshield import PyLogShield")
         self.logger = logger or get_logger(name="credential_bridge", log_level=log_level, force=True)
 
-        self.session = get_session(cert, proxies)
-
         # --- Resolve credentials (args override config) ---
         # Stored under underscore-prefixed names to keep the secret material off
         # the public attribute surface (vault_addr / mount_point remain public).
@@ -130,8 +128,8 @@ class VaultBackend(BaseSecretBackend):
                 client = hvac.Client(
                     url=self.vault_addr,
                     token=self._vault_token,
-                    session=self.session,
                     verify=tls_verify,
+                    proxies=self.proxies,
                 )
                 if not client.is_authenticated():
                     raise VaultAuthError("Failed to authenticate with Vault using token.")
@@ -141,8 +139,8 @@ class VaultBackend(BaseSecretBackend):
             # AppRole
             client = hvac.Client(
                 url=self.vault_addr,
-                session=self.session,
                 verify=tls_verify,
+                proxies=self.proxies,
             )
             auth_response = client.auth.approle.login(
                 role_id=self._vault_role_id,
@@ -280,6 +278,17 @@ class VaultBackend(BaseSecretBackend):
     # ------------------------------------------------------------------
     # Extra helpers
     # ------------------------------------------------------------------
+
+    def get_vault_creds(self) -> Dict[str, str]:
+        """Return the credentials in use by this backend instance."""
+        creds: Dict[str, str] = {}
+        if self._vault_token:
+            creds["vault_token"] = self._vault_token
+        if self._vault_role_id:
+            creds["vault_role_id"] = self._vault_role_id
+        if self._vault_secret_id:
+            creds["vault_secret_id"] = self._vault_secret_id
+        return creds
 
     def get_config(self) -> Optional[Dict[str, Any]]:
         """Return the KV engine configuration for the current mount point."""
