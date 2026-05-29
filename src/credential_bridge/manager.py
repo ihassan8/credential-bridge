@@ -58,8 +58,8 @@ class SecretsManager:
         """Update the secret stored under *name*. Delegates to the active backend.
 
         See the backend's update_secret for merge-vs-replace semantics: Vault
-        merges keys, Keyring replaces the whole dict, EnvFile replaces each
-        supplied key in place.
+        merges keys, Keyring merges keys (same semantics as Vault), EnvFile
+        replaces each supplied key in place.
         """
         self._backend.update_secret(name, secret)
 

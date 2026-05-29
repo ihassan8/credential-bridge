@@ -99,11 +99,15 @@ cb keyring get github_token --service-name myapp
 
 ### update_secret
 
-Replaces the stored value for an existing key. Raises `KeyringSecretNotFoundError` if the key
-does not exist — use `add_secret()` first.
+Merges the supplied fields into the existing secret. Keys you pass overwrite matching
+fields; keys already stored but not present in the update are preserved. Raises
+`KeyringSecretNotFoundError` if the key does not exist — use `add_secret()` first.
 
 ```python
-backend.update_secret("github_token", {"github_token": "ghp_new"})
+backend.add_secret("api", {"token": "old", "region": "us-east-1"})
+backend.update_secret("api", {"token": "new"})
+backend.get_secret("api")
+# {"token": "new", "region": "us-east-1"}  — region preserved
 ```
 
 CLI equivalent:

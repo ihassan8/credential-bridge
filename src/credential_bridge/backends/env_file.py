@@ -18,7 +18,7 @@ from .base import BaseSecretBackend
 # a single '#', one space, then a single non-space token (no '=').
 # This distinguishes real group headers from disabled-key comments like
 # '#KEY=val' or hand-written inline annotations.
-_GROUP_HEADER_RE = re.compile(r"^# \S+$")
+_GROUP_HEADER_RE = re.compile(r"^# [^\s=]+$")
 
 
 def _quote_value(value: str) -> str:
@@ -31,7 +31,7 @@ def _quote_value(value: str) -> str:
     """
     # Needs quoting if contains spaces or special chars
     if any(c in value for c in (" ", "\t", "\n", "\r", "#", '"', "'", "\\", "$", "`")):
-        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
         return f'"{escaped}"'
     return value
 
@@ -87,7 +87,10 @@ class EnvFileBackend(BaseSecretBackend):
             else:
                 fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
                 try:
-                    os.write(fd, content)
+                    remaining = content
+                    while remaining:
+                        n = os.write(fd, remaining)
+                        remaining = remaining[n:]
                 finally:
                     os.close(fd)
             os.replace(str(tmp), str(self.path))
@@ -136,18 +139,25 @@ class EnvFileBackend(BaseSecretBackend):
         exception rather than the underlying filelock.Timeout.
         """
         try:
-            with self._lock:
-                yield
+            self._lock.acquire()
         except Timeout as exc:
             raise EnvFileError(
                 f"Timed out after {self._lock_timeout}s waiting for lock on {self.path}. Another process is holding it."
             ) from exc
+        try:
+            yield
+        finally:
+            self._lock.release()
 
     def _sync_environ(self, keys: Dict[str, str]) -> None:
         for k, v in keys.items():
             os.environ[k] = str(v)
 
     def add_secret(self, name: str, secret: Dict[str, Any]) -> None:
+        if not re.fullmatch(r"[^\s=]+", name):
+            raise EnvFileError(
+                f"Invalid group name '{name}': must be a single token with no whitespace or '=' characters."
+            )
         with self._locked():
             lines = self._read_lines()
             existing = self._parse_lines(lines)
@@ -259,7 +269,7 @@ class EnvFileBackend(BaseSecretBackend):
                     has_sibling_keys = False
                     for i in range(comment_idx + 1, len(lines)):
                         s = lines[i].strip()
-                        if s.startswith("#"):
+                        if _GROUP_HEADER_RE.match(s):
                             break
                         if "=" in s and not s.startswith("#") and i != key_idx:
                             has_sibling_keys = True
@@ -281,7 +291,7 @@ class EnvFileBackend(BaseSecretBackend):
                     to_remove.add(i)
                     j = i + 1
                     while j < len(lines):
-                        if lines[j].strip().startswith("#"):
+                        if _GROUP_HEADER_RE.match(lines[j].strip()):
                             break
                         to_remove.add(j)
                         j += 1

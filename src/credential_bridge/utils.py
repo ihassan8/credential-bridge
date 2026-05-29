@@ -34,9 +34,16 @@ def save_config(data: Dict[str, Any]) -> None:
         # then rename — so a crash never leaves a half-written config file.
         tmp = str(CONFIG_FILE) + ".tmp"
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
-        os.replace(tmp, str(CONFIG_FILE))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4)
+            os.replace(tmp, str(CONFIG_FILE))
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
     else:
         # Windows: NTFS ACLs require win32security; write normally and warn the user
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -58,8 +65,7 @@ def load_config() -> Dict[str, Any]:
                 return json.load(f)  # type: ignore[no-any-return]
             except json.JSONDecodeError as exc:
                 raise ConfigurationError(
-                    f"Config file {CONFIG_FILE} contains invalid JSON: {exc}. "
-                    "Delete it or repair it manually."
+                    f"Config file {CONFIG_FILE} contains invalid JSON: {exc}. Delete it or repair it manually."
                 ) from exc
     return {}
 

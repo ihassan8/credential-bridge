@@ -616,8 +616,8 @@ def run_vault_cli(
 
 
 def run_env_cli(action: str, env_path: str, name: str, secret: Dict[str, str]) -> None:
-    backend = EnvFileBackend(path=env_path)
     try:
+        backend = EnvFileBackend(path=env_path)
         if action == "list":
             keys = backend.list_secrets()
             _print_result_list(keys, title=f"Keys in {env_path}")

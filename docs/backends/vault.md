@@ -70,8 +70,13 @@ also read automatically if the corresponding constructor arguments are omitted.
 | `vault_secret_id` | `str \| None` | `None` | AppRole secret ID. Requires `vault_role_id`. |
 | `service_name` | `str` | `"default_service"` | Logging tag only — not used in Vault API calls. |
 | `mount_point` | `str \| None` | current OS username | KV-v2 mount point. Defaults to the current OS username (`getpass.getuser()`). Pass an explicit string to override. |
-| `proxies` | `dict \| None` | `None` | HTTP proxy settings passed to the `requests` session. |
-| `cert` | `str \| None` | `None` | Path to a custom CA certificate. `None` uses the system CA bundle. |
+| `namespace` | `str \| None` | `None` | Vault Enterprise namespace (e.g. `"team-a/"`). Leave `None` for open-source Vault. |
+| `timeout` | `int` | `30` | Request timeout in seconds passed to `hvac.Client`. Increase for slow networks; decrease for fast-fail. |
+| `proxies` | `dict \| None` | `None` | HTTP proxy settings passed to `hvac.Client`. |
+| `cert` | `str \| None` | `None` | Path to a custom CA bundle for TLS server verification. `None` uses the system CA bundle. |
+| `tls_client_cert` | `tuple \| None` | `None` | `(cert_path, key_path)` tuple for mutual TLS (client certificate authentication). |
+| `allow_redirects` | `bool` | `True` | Whether to follow HTTP redirects. |
+| `session` | `requests.Session \| None` | `None` | Pre-configured `requests.Session` to use for all Vault requests. When supplied, the session's own `verify`, `cert`, and `proxies` settings apply — constructor-level values for those params are ignored by requests. |
 | `log_level` | `LogLevel \| str` | `LogLevel.WARNING` | Minimum log level for the internal logger. |
 | `logger` | `PyLogShield \| None` | `None` | Provide your own `PyLogShield` logger instance. |
 | `mask` | `bool` | `True` | Mask secret values in log output. |
@@ -110,7 +115,38 @@ backend = VaultBackend()
     only). On Windows, normal NTFS write permissions are used and a `UserWarning` is
     emitted — consider restricting access manually.
 
-## Custom TLS certificate
+## Vault Enterprise namespaces
+
+Pass `namespace` to target a Vault Enterprise namespace. The value is forwarded
+directly to `hvac.Client` and prepended to every request path.
+
+```python
+backend = VaultBackend(
+    vault_url="https://vault.example.com",
+    vault_token="s.xxx",
+    namespace="team-a/",
+)
+```
+
+Leave `namespace=None` (the default) for open-source Vault.
+
+## Request timeout
+
+The default request timeout is **30 seconds** (inherited from `hvac`). Override it
+with the `timeout` argument:
+
+```python
+# Fail faster on unresponsive Vault servers
+backend = VaultBackend(
+    vault_url="https://vault.example.com",
+    vault_token="s.xxx",
+    timeout=5,
+)
+```
+
+## TLS configuration
+
+### Server certificate verification
 
 Pass `cert` to verify the Vault server against a custom CA bundle instead of the
 system trust store:
@@ -124,6 +160,46 @@ backend = VaultBackend(
 ```
 
 TLS verification is always enabled — there is no option to disable it.
+
+### Mutual TLS (client certificates)
+
+Pass `tls_client_cert` as a `(cert_path, key_path)` tuple when the Vault server
+requires clients to present a certificate:
+
+```python
+backend = VaultBackend(
+    vault_url="https://vault.internal",
+    vault_token="s.xxx",
+    tls_client_cert=("/path/to/client.crt", "/path/to/client.key"),
+)
+```
+
+## Custom requests session
+
+Pass `session` to take full control of the underlying HTTP transport — useful for
+connection pooling tuning, disabling environment proxy detection, or injecting
+custom middleware:
+
+```python
+import requests
+from credential_bridge import VaultBackend
+
+session = requests.Session()
+session.trust_env = False          # ignore HTTP_PROXY / REQUESTS_CA_BUNDLE env vars
+session.max_redirects = 3
+
+backend = VaultBackend(
+    vault_url="https://vault.example.com",
+    vault_token="s.xxx",
+    session=session,
+)
+```
+
+!!! note
+    When a `session` is provided, the session's own `verify`, `cert`, and `proxies`
+    attributes take effect. The `cert`, `tls_client_cert`, and `proxies` constructor
+    arguments are passed to `hvac.Client` but requests will use the session values
+    for those settings.
 
 ## CRUD operations
 
@@ -271,7 +347,11 @@ cfg = backend.get_config()
 Before every operation `VaultBackend` calls `_refresh_token_if_needed()`, which
 looks up the current token's TTL. If the TTL is below **5 minutes** (300 seconds)
 the token is automatically renewed in place, so long-running processes don't need
-to handle token expiry manually. If the renewal fails because the token is non-renewable, a `VaultAuthError` is raised. If Vault is unreachable during the refresh check (network error, timeout, server down), a `VaultConnectionError` is raised immediately — the error is not silently swallowed.
+to handle token expiry manually.
+
+- **Non-renewable / forbidden**: raises `VaultAuthError`. For AppRole sessions the backend re-authenticates automatically instead of raising.
+- **Vault unreachable** (network error, timeout, server down): raises `VaultConnectionError`.
+- **Other unexpected errors**: logged as a warning and swallowed — the actual operation that follows is still attempted and will raise its own exception if Vault is truly unavailable.
 
 ## Error handling
 

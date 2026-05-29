@@ -3,7 +3,7 @@
 import getpass
 import os
 from contextlib import contextmanager
-from typing import Any, Dict, Generator, List, Optional, Union
+from typing import Any, Dict, Generator, List, Optional, Tuple, Union
 
 import hvac
 import requests
@@ -48,11 +48,75 @@ class VaultBackend(BaseSecretBackend):
         mount_point: Optional[str] = None,
         proxies: Optional[Dict[str, str]] = None,
         cert: Optional[str] = None,
+        tls_client_cert: Optional[Tuple[str, str]] = None,
+        namespace: Optional[str] = None,
+        timeout: int = 30,
+        allow_redirects: bool = True,
+        session: Optional[requests.Session] = None,
         log_level: Union[LogLevel, str] = LogLevel.WARNING,
         logger: Optional[PyLogShield] = None,
         mask: bool = True,
-        persist: bool = False,  # opt-in credential persistence to ~/.vault_config.json
+        persist: bool = False,
     ) -> None:
+        """Create a VaultBackend instance and authenticate with Vault.
+
+        Address resolution order: ``vault_url`` → ``VAULT_ADDR`` env var →
+        ``vault_addr`` in ``~/.vault_config.json`` → ``ConfigurationError``.
+        This check runs first, before any other setup (fail-fast).
+
+        Parameters
+        ----------
+        vault_url : str, optional
+            Vault server base URL. If omitted, ``VAULT_ADDR`` and then
+            ``~/.vault_config.json`` are consulted.
+        vault_token : str, optional
+            Token for token-based auth. Mutually exclusive with ``vault_role_id``
+            / ``vault_secret_id``. Falls back to ``vault_token`` in
+            ``~/.vault_config.json`` when omitted.
+        vault_role_id : str, optional
+            AppRole role ID. Must be combined with ``vault_secret_id``.
+        vault_secret_id : str, optional
+            AppRole secret ID. Must be combined with ``vault_role_id``.
+        service_name : str
+            Logging tag. Not used in any Vault API call.
+        mount_point : str, optional
+            KV-v2 engine mount point. Defaults to the current OS username via
+            ``getpass.getuser()`` (cross-platform safe on Windows).
+        proxies : dict, optional
+            Proxy map forwarded to ``hvac.Client`` (e.g.
+            ``{"https": "http://proxy:8080"}``).
+        cert : str, optional
+            Path to a CA bundle for TLS server verification, forwarded as
+            ``verify=`` to ``hvac.Client``. ``None`` uses the system CA bundle.
+            TLS verification cannot be disabled.
+        tls_client_cert : tuple, optional
+            ``(cert_path, key_path)`` tuple for mutual TLS, forwarded as
+            ``cert=`` to ``hvac.Client``.
+        namespace : str, optional
+            Vault Enterprise namespace (e.g. ``"team-a/"``). Forwarded to
+            ``hvac.Client``. Leave ``None`` for open-source Vault.
+        timeout : int
+            Request timeout in seconds forwarded to ``hvac.Client``. Defaults
+            to 30 (the hvac default).
+        allow_redirects : bool
+            Whether to follow HTTP redirects, forwarded to ``hvac.Client``.
+        session : requests.Session, optional
+            Pre-configured ``requests.Session`` forwarded to ``hvac.Client``.
+            When provided, the session's own ``verify``, ``cert``, and
+            ``proxies`` settings take effect and the constructor-level values
+            for those parameters are ignored by requests.
+        log_level : LogLevel or str
+            Minimum log level for the internal ``PyLogShield`` logger.
+        logger : PyLogShield, optional
+            Bring-your-own logger. Must be a ``PyLogShield`` instance.
+        mask : bool
+            Mask secret values in log output.
+        persist : bool
+            Write the resolved address and credentials to
+            ``~/.vault_config.json`` so future ``VaultBackend()`` calls with no
+            arguments can authenticate without repeating them. Defaults to
+            ``False``.
+        """
         # --- Fail fast: resolve vault address before any other setup ---
         config = load_config()
         if vault_url:
@@ -69,7 +133,12 @@ class VaultBackend(BaseSecretBackend):
         self.mask = mask
         self.service_name = service_name
         self.mount_point = mount_point if mount_point is not None else _safe_getuser()
-        self.cert = cert  # None means use system CA bundle; path string means custom cert
+        self.cert = cert  # CA bundle path passed as verify= to hvac; None uses system CA bundle
+        self.tls_client_cert = tls_client_cert  # (cert_path, key_path) tuple for mutual TLS
+        self.namespace = namespace
+        self.timeout = timeout
+        self.allow_redirects = allow_redirects
+        self.session = session
         self.proxies = proxies
 
         if logger and not isinstance(logger, PyLogShield):
@@ -95,13 +164,13 @@ class VaultBackend(BaseSecretBackend):
 
         # --- Persist credentials to config (opt-in) ---
         if persist:
-            if vault_token:
-                config["vault_token"] = vault_token
+            if self._vault_token:
+                config["vault_token"] = self._vault_token
                 config["vault_role_id"] = None
                 config["vault_secret_id"] = None
-            elif vault_role_id and vault_secret_id:
-                config["vault_role_id"] = vault_role_id
-                config["vault_secret_id"] = vault_secret_id
+            elif self._vault_role_id and self._vault_secret_id:
+                config["vault_role_id"] = self._vault_role_id
+                config["vault_secret_id"] = self._vault_secret_id
                 config["vault_token"] = None
 
             config["vault_addr"] = self.vault_addr
@@ -123,24 +192,32 @@ class VaultBackend(BaseSecretBackend):
         self.logger.info("Authenticating with Vault...")
         try:
             tls_verify = self.cert if self.cert is not None else True
+            # When no session is supplied, create one with trust_env=False so
+            # that ambient HTTP_PROXY / HTTPS_PROXY env vars do not silently
+            # route Vault traffic through an unintended proxy.
+            effective_session = self.session
+            if effective_session is None:
+                effective_session = requests.Session()
+                effective_session.trust_env = False
+            shared_kwargs: Dict[str, Any] = {
+                "url": self.vault_addr,
+                "verify": tls_verify,
+                "proxies": self.proxies,
+                "timeout": self.timeout,
+                "namespace": self.namespace,
+                "cert": self.tls_client_cert,
+                "allow_redirects": self.allow_redirects,
+                "session": effective_session,
+            }
             if self._vault_token:
-                client = hvac.Client(
-                    url=self.vault_addr,
-                    token=self._vault_token,
-                    verify=tls_verify,
-                    proxies=self.proxies,
-                )
+                client = hvac.Client(**shared_kwargs, token=self._vault_token)
                 if not client.is_authenticated():
                     raise VaultAuthError("Failed to authenticate with Vault using token.")
                 self.logger.info("Authenticated with Vault via token.")
                 return client
 
             # AppRole
-            client = hvac.Client(
-                url=self.vault_addr,
-                verify=tls_verify,
-                proxies=self.proxies,
-            )
+            client = hvac.Client(**shared_kwargs)
             auth_response = client.auth.approle.login(
                 role_id=self._vault_role_id,
                 secret_id=self._vault_secret_id,
@@ -274,7 +351,7 @@ class VaultBackend(BaseSecretBackend):
                 path=path,
                 mount_point=self.mount_point,
             )
-        return response["data"]["keys"]  # type: ignore[no-any-return]
+            return response["data"]["keys"]  # type: ignore[no-any-return]
 
     # ------------------------------------------------------------------
     # Extra helpers

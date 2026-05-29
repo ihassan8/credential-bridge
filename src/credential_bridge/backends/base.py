@@ -52,7 +52,7 @@ class BaseSecretBackend(ABC):
 
         Behavior varies by backend:
         - VaultBackend: merges supplied keys into the existing secret (other keys are preserved).
-        - KeyringBackend: replaces the entire stored dict with the new value.
+        - KeyringBackend: merges supplied keys into the existing dict ({**existing, **new}); omitted keys are kept.
         - EnvFileBackend: replaces each supplied key in-place; raises if any key is missing.
         """
 

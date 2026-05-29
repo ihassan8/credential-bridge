@@ -93,13 +93,15 @@ src/credential_bridge/
 - `EnvFileBackend.delete_secret(name)` also removes the preceding `# group_name` comment header if no other key=value lines remain under it, keeping the file clean.
 - `EnvFileBackend.update_secret` raises `EnvFileNotFoundError` (not the base `EnvFileError`) when keys are missing, consistent with `delete_secret`.
 - All logging goes through `PyLogShield` for sensitive data masking. Both `VaultBackend` and `KeyringBackend` accept an optional `logger: PyLogShield` parameter.
-- TLS verification is enabled by default (`verify=True`). Pass `cert="/path/to/ca.pem"` for custom CA bundles.
-- `verify` and `proxies` are passed directly to `hvac.Client` — no intermediate `requests.Session` is created. Users who need `trust_env=False` or other session-level config should manage their own session at the project level.
+- TLS verification is enabled by default. `cert` (CA bundle path) is forwarded as `verify=` to `hvac.Client`; `tls_client_cert` (`(cert_path, key_path)`) is forwarded as `cert=` for mutual TLS. There is no option to disable TLS verification.
+- All seven hvac transport params are forwarded directly: `verify` (`cert`), `cert` (`tls_client_cert`), `proxies`, `timeout` (default 30 s), `namespace`, `allow_redirects` (default `True`), and `session`. When `session` is supplied, the session's own `verify`/`cert`/`proxies` take effect and the constructor-level values for those are ignored by requests.
+- `namespace` targets Vault Enterprise namespaces; leave `None` for open-source Vault.
+- `get_session()` (exported from `credential_bridge`) creates a `requests.Session` with `trust_env=False` hardcoded and `verify` set from the `cert` arg. Intended for callers that need a pre-configured session independently of the backends.
 - `KeyringBackend.list_secrets()` always raises `KeyringError`; Windows Credential Manager and macOS Keychain don't expose enumeration APIs.
 - `EnvFileBackend.add_secret(name, {...})` writes a `# name` comment block above the key-value pairs. `get_secret(name)` resolves either a single key or all keys under a matching comment block.
 - `EnvFileBackend(load_into_environ=True)` syncs written/updated values into `os.environ` immediately.
 - `add_secret` idempotency varies: `VaultBackend` overwrites (creates new KV-v2 version); `KeyringBackend` raises `KeyringError`; `EnvFileBackend` raises `EnvFileKeyExistsError`. Do not assume idempotency via `SecretsManager`.
-- `update_secret` merge vs replace: `VaultBackend` merges supplied keys (other keys preserved); `KeyringBackend` replaces the entire stored dict; `EnvFileBackend` replaces each supplied key in-place and raises `EnvFileNotFoundError` if any key is missing.
+- `update_secret` merge semantics: `VaultBackend` merges via KV-v2 patch (other keys preserved); `KeyringBackend` also merges (`{**existing, **new}` — omitted fields are kept); `EnvFileBackend` replaces each supplied key in-place and raises `EnvFileNotFoundError` if any key is missing.
 - `VaultBackend` exposes version-management helpers beyond the abstract interface: `delete_secret_versions`, `undelete_secret_versions`, `destroy_secret_versions`, and `read_secret_metadata`.
 - On Windows, `save_config()` cannot set file permissions to 0o600 and issues a `UserWarning` instead; `cli/_output.py` reconfigures stdout/stderr to UTF-8 to handle Rich's box-drawing characters.
 
@@ -108,19 +110,25 @@ src/credential_bridge/
 ```
 CredentialBridgeError
 ├── BackendError
+│   ├── SecretNotFoundError             — cross-backend base for all "not found" errors
+│   │   ├── VaultSecretNotFoundError    — also inherits VaultError
+│   │   ├── KeyringSecretNotFoundError  — also inherits KeyringError
+│   │   └── EnvFileNotFoundError        — also inherits EnvFileError
 │   ├── VaultError
 │   │   ├── VaultAuthError              — bad token / AppRole
 │   │   ├── VaultConnectionError        — unreachable server
-│   │   └── VaultSecretNotFoundError    — secret path does not exist
+│   │   └── VaultSecretNotFoundError    — (see SecretNotFoundError above)
 │   ├── KeyringError
-│   │   ├── KeyringSecretNotFoundError  — secret does not exist in keyring
+│   │   ├── KeyringSecretNotFoundError  — (see SecretNotFoundError above)
 │   │   └── KeyringKeyExistsError       — add_secret on existing key
 │   └── EnvFileError
-│       ├── EnvFileNotFoundError        — key not found
+│       ├── EnvFileNotFoundError        — (see SecretNotFoundError above)
 │       └── EnvFileKeyExistsError       — add_secret on existing key
 ├── BackendNotRegisteredError
 └── ConfigurationError
 ```
+
+The three `*NotFoundError` classes use multiple inheritance — `except SecretNotFoundError` catches any backend's "not found" in backend-agnostic code.
 
 ## Vault Environment Variables
 
