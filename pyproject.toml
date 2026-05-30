@@ -5,9 +5,6 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "credential-bridge"
 description = "A Python library for unified secrets management across HashiCorp Vault, system keyring, and .env files."
-authors = [
-    {name = "Vertex AI Automations", email = "info@vertexaiautomations.com"}
-]
 readme = "README.md"
 requires-python = ">=3.8"
 keywords = ["vault", "hashicorp", "keyring", "credentials", "authentication", "secrets", "dotenv", "env-file", "secrets-management"]
@@ -34,10 +31,10 @@ classifiers = [
 dynamic = ["version", "dependencies", "optional-dependencies"]
 
 [project.urls]
-Homepage = "https://www.vertexaiautomations.com"
-Documentation = "https://vertex-ai-automations.github.io/credential-bridge"
-Repository = "https://github.com/vertex-ai-automations/credential-bridge"
-"Bug Tracker" = "https://github.com/vertex-ai-automations/credential-bridge/issues/new"
+Homepage = "https://github.com/ihassan8"
+Documentation = "https://ihassan8.github.io/credential-bridge"
+Repository = "https://github.com/ihassan8/credential-bridge"
+"Bug Tracker" = "https://github.com/ihassan8/credential-bridge/issues/new"
 
 [project.scripts]
 cb          = "credential_bridge.cli.main:main"

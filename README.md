@@ -1,23 +1,21 @@
 <a name="readme-top"></a>
 
 <div align="center">
-<img src="https://github.com/vertex-ai-automations/credential-bridge/raw/main/docs/img/credential_bridge.png" alt="Credential Bridge Logo" width="420">
+<img src="https://github.com/ihassan8/credential-bridge/raw/main/docs/img/credential_bridge.png" alt="Credential Bridge Logo" width="420">
 
 <br/>
 
 [![PyPI version](https://img.shields.io/pypi/v/credential-bridge?color=indigo&logo=pypi&logoColor=white)](https://pypi.org/project/credential-bridge/)
 [![Python versions](https://img.shields.io/pypi/pyversions/credential-bridge?color=indigo&logo=python&logoColor=white)](https://pypi.org/project/credential-bridge/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-indigo.svg)](https://github.com/vertex-ai-automations/credential-bridge/blob/main/LICENSE.txt)
-[![CI](https://img.shields.io/github/actions/workflow/status/vertex-ai-automations/credential-bridge/ci.yml?branch=main&label=CI&logo=github)](https://github.com/vertex-ai-automations/credential-bridge/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-indigo.svg)](https://github.com/ihassan8/credential-bridge/blob/main/LICENSE.txt)
+[![CI](https://img.shields.io/github/actions/workflow/status/ihassan8/credential-bridge/ci.yml?branch=main&label=CI&logo=github)](https://github.com/ihassan8/credential-bridge/actions/workflows/ci.yml)
 
 <br/>
 
 <p>
-<a href="https://vertex-ai-automations.github.io/credential-bridge"><strong>Documentation</strong></a>
+<a href="https://ihassan8.github.io/credential-bridge"><strong>Documentation</strong></a>
 &nbsp;·&nbsp;
-<a href="https://github.com/vertex-ai-automations/credential-bridge/issues/new">Report Bug</a>
-&nbsp;·&nbsp;
-<a href="https://www.vertexaiautomations.com">Vertex AI Automations</a>
+<a href="https://github.com/ihassan8/credential-bridge/issues/new">Report Bug</a>
 </p>
 
 </div>
@@ -257,7 +255,7 @@ mkdocs serve
 
 ### CI Pipeline
 
-Every push to `main` and every pull request runs automatically via [shared-workflows](https://github.com/vertex-ai-automations/shared-workflows):
+Every push to `main` and every pull request runs automatically via [shared-workflows](https://github.com/ihassan8/shared-workflows):
 
 | Job | What it checks |
 |-----|----------------|
@@ -272,7 +270,7 @@ Every push to `main` and every pull request runs automatically via [shared-workf
 
 All contributions are welcome! Fork the repo, make your changes, and open a pull request. You can also open an issue with the label `enhancement`.
 
-[View all contributors](https://github.com/vertex-ai-automations/credential-bridge/graphs/contributors)
+[View all contributors](https://github.com/ihassan8/credential-bridge/graphs/contributors)
 
 ---
 

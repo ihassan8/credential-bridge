@@ -14,7 +14,7 @@ pip install credential-bridge
 ## Development install
 
 ```bash
-git clone https://github.com/vertex-ai-automations/credential-bridge
+git clone https://github.com/ihassan8/credential-bridge
 cd credential-bridge
 pip install -e ".[dev]"
 ```

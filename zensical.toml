@@ -1,15 +1,13 @@
 [project]
 site_name = "Credential Bridge"
 site_description = "A Python library for unified secrets management across HashiCorp Vault, system keyring, and .env files."
-site_author = "Vertex AI Automations"
-site_url = "https://vertex-ai-automations.github.io/credential-bridge"
+site_url = "https://ihassan8.github.io/credential-bridge"
 site_dir = "public"
 docs_dir = "docs"
 use_directory_urls = true
 repo_name = "credential-bridge"
-repo_url = "https://github.com/vertex-ai-automations/credential-bridge"
+repo_url = "https://github.com/ihassan8/credential-bridge"
 edit_uri = "edit/main/docs/"
-copyright = "Copyright &copy; 2024-2026 Vertex AI Automations"
 
 extra_css = ["css/extra.css"]
 extra_javascript = ["js/extra.js"]
@@ -99,7 +97,7 @@ generator = false
 # ── Social links ─────────────────────────────────────────────────────────────
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
-link = "https://github.com/vertex-ai-automations/credential-bridge"
+link = "https://github.com/ihassan8/credential-bridge"
 name = "Credential Bridge on GitHub"
 
 [[project.extra.social]]
@@ -177,7 +175,7 @@ auto_title = true
 [project.markdown_extensions.pymdownx.magiclink]
 normalize_issue_symbols = true
 repo_url_shorthand = true
-user = "vertex-ai-automations"
+user = "ihassan8"
 repo = "credential-bridge"
 
 [project.markdown_extensions.pymdownx.mark]

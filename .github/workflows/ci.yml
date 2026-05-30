@@ -11,13 +11,13 @@ jobs:
 
   lint:
     name: Lint
-    uses: vertex-ai-automations/shared-workflows/.github/workflows/lint.yml@main
+    uses: ihassan8/shared-workflows/.github/workflows/lint.yml@main
     with:
       lint-args: 'src/'
 
   typecheck:
     name: Type Check
-    uses: vertex-ai-automations/shared-workflows/.github/workflows/typecheck.yml@main
+    uses: ihassan8/shared-workflows/.github/workflows/typecheck.yml@main
     with:
       install-command: 'pip install -e ".[dev]"'
       typecheck-command: 'mypy src/ --ignore-missing-imports'
@@ -25,7 +25,7 @@ jobs:
   test:
     name: Test
     needs: [lint, typecheck]
-    uses: vertex-ai-automations/shared-workflows/.github/workflows/test.yml@main
+    uses: ihassan8/shared-workflows/.github/workflows/test.yml@main
     with:
       python-versions: '["3.8", "3.9", "3.10", "3.11", "3.12"]'
       os-matrix: '["ubuntu-latest", "windows-latest"]'
@@ -34,13 +34,13 @@ jobs:
 
   audit:
     name: Audit
-    uses: vertex-ai-automations/shared-workflows/.github/workflows/audit.yml@main
+    uses: ihassan8/shared-workflows/.github/workflows/audit.yml@main
     with:
       install-command: 'pip install -e ".[dev]"'
 
   coverage:
     name: Coverage
-    uses: vertex-ai-automations/shared-workflows/.github/workflows/coverage.yml@main
+    uses: ihassan8/shared-workflows/.github/workflows/coverage.yml@main
     with:
       install-command: 'pip install -e ".[dev]"'
       test-command: 'pytest tests/unit/'
